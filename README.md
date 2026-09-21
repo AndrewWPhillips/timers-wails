@@ -1,5 +1,12 @@
 # timers
 
+[![CI](https://img.shields.io/github/actions/workflow/status/AndrewWPhillips/timers-wails/ci.yml?branch=main&label=CI)](https://github.com/AndrewWPhillips/timers-wails/actions/workflows/ci.yml)
+[![Go version](https://img.shields.io/github/go-mod/go-version/AndrewWPhillips/timers-wails)](go.mod)
+[![Last commit](https://img.shields.io/github/last-commit/AndrewWPhillips/timers-wails)](https://github.com/AndrewWPhillips/timers-wails/commits/main)
+[![License: MIT](https://img.shields.io/github/license/AndrewWPhillips/timers-wails)](LICENSE)
+[![Wails v3](https://img.shields.io/badge/Wails-v3-red)](https://v3.wails.io)
+[![Platform](https://img.shields.io/badge/platform-Windows-blue)](#development)
+
 I wrote this countdown timer to see how easy it is to do in Go and because
 I have never been happy with the Windows timer, nor any timer app I have tried
 on Linux or Android.

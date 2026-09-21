@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  go:
+    name: Go (vet, format, test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # Only ./internal/... is checked here. The root package embeds
+      # frontend/dist (a build output that is not committed) and links against
+      # the native webview, so it needs the full `wails3 task build`, which is
+      # not run in CI. All of the logic worth testing lives in internal/.
+      - name: Check formatting
+        run: test -z "$(gofmt -l *.go internal)"
+
+      - name: Vet
+        run: go vet ./internal/...
+
+      - name: Test
+        run: go test ./internal/...
+
+  frontend:
+    name: Frontend (typecheck)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      # The generated Go bindings are committed, so this type-checks the whole
+      # frontend against the real Go service API.
+      - run: npx vue-tsc --noEmit
