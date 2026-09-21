@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=My Product
+Comment=A timers application
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/timers.exe %u
+Terminal=false
+Type=Application
+Icon=timers.exe
+Categories=Utility;
+StartupWMClass=timers.exe
+
+ 
