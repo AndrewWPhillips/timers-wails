@@ -179,11 +179,12 @@ function clearSound(): void {
         <div class="row row-header">
           <h3>Presets</h3>
           <span></span>
-          <span class="col-heading" aria-hidden="true">Hour&nbsp;&nbsp;&nbsp;</span>
-          <span class="col-heading" aria-hidden="true">Min&nbsp;&nbsp;&nbsp;</span>
-          <span class="col-heading" aria-hidden="true">Sec&nbsp;&nbsp;&nbsp;</span>
+          <span class="hms-heading" aria-hidden="true">
+            <span class="col-heading">Hour</span>
+            <span class="col-heading">Min</span>
+            <span class="col-heading">Sec</span>
+          </span>
           <span class="col-heading" aria-hidden="true">Order</span>
-          <span></span>
           <span></span>
         </div>
         <ul class="rows">
@@ -196,23 +197,27 @@ function clearSound(): void {
               title="Preset colour"
               :aria-label="`Colour for ${row.label || 'preset'}`"
             />
-            <input v-model="row.hours" v-drag-number class="num" type="number" min="0" max="99" aria-label="Hours" />
-            <input v-model="row.minutes" v-drag-number class="num" type="number" min="0" max="59" aria-label="Minutes" />
-            <input v-model="row.seconds" v-drag-number class="num" type="number" min="0" max="59" aria-label="Seconds" />
-            <button
-              class="icon arrow"
-              title="Move up"
-              aria-label="Move up"
-              :disabled="index === 0"
-              @click="move(index, -1)"
-            >&uarr;</button>
-            <button
-              class="icon arrow"
-              title="Move down"
-              aria-label="Move down"
-              :disabled="index === rows.length - 1"
-              @click="move(index, 1)"
-            >&darr;</button>
+            <span class="hms">
+              <input v-model="row.hours" v-drag-number class="num" type="number" min="0" max="99" aria-label="Hours" />
+              <input v-model="row.minutes" v-drag-number class="num" type="number" min="0" max="59" aria-label="Minutes" />
+              <input v-model="row.seconds" v-drag-number class="num" type="number" min="0" max="59" aria-label="Seconds" />
+            </span>
+            <span class="arrows">
+              <button
+                class="icon arrow"
+                title="Move up"
+                aria-label="Move up"
+                :disabled="index === 0"
+                @click="move(index, -1)"
+              >&uarr;</button>
+              <button
+                class="icon arrow"
+                title="Move down"
+                aria-label="Move down"
+                :disabled="index === rows.length - 1"
+                @click="move(index, 1)"
+              >&darr;</button>
+            </span>
             <button class="icon danger" title="Remove" aria-label="Remove" @click="removeRow(index)">&times;</button>
           </li>
         </ul>
@@ -322,6 +327,13 @@ h3 {
   margin: 18px 0 8px;
 }
 
+.row-header h3 {
+  /* Same implicit min-width: auto issue as .label -- without this, "Presets"
+     forces the 1fr column wider than the data rows' label input can match,
+     shifting every column after it out of alignment at narrow widths. */
+  min-width: 0;
+}
+
 .rows {
   list-style: none;
   margin: 0;
@@ -336,17 +348,42 @@ h3 {
 }
 
 /* Grid, not flex: the header row and every preset row need identical column
-   widths so "Hour"/"Min"/"Sec" line up exactly with the inputs below them.
-   The last three columns are a fixed width, not auto, because the header
-   row's cells there are empty (0-width) while the data rows' are icon
-   buttons (~20px) -- with auto columns that mismatch would make the two
-   rows compute a different width for the flexible label column and throw
-   the alignment off. */
+   widths so the group headings line up exactly with the inputs below them.
+   Every column is a fixed width, not auto -- the header row's cells are
+   either empty or hold short static text, while the data rows' hold real
+   inputs/buttons; with auto columns that mismatch would make the two rows
+   compute a different width for the flexible label column and throw the
+   alignment off. Hour/min/sec and the two arrow buttons are each grouped
+   into one column (a tight inner flex row, see .hms/.arrows below) so they
+   sit close together and leave more of the narrow dialog to the label. */
 .row {
   display: grid;
-  grid-template-columns: 1fr 28px 52px 52px 52px 16px 16px 28px;
+  grid-template-columns: 1fr 28px 124px 34px 20px;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
+}
+
+.hms-heading,
+.hms {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.hms-heading {
+  /* Anchored to the bottom of the (taller, h3-containing) header row, same
+     reason as .col-heading below. */
+  align-self: end;
+}
+
+.hms-heading .col-heading {
+  width: 40px; /* matches .num */
+}
+
+.arrows {
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .col-heading {
@@ -366,7 +403,7 @@ input {
   border: 1px solid var(--line);
   border-radius: 7px;
   color: var(--text);
-  padding: 6px 8px;
+  padding: 6px 6px;
   font-size: 0.85rem;
 }
 
@@ -376,12 +413,18 @@ input:focus {
 }
 
 .label {
-  flex: 1;
+  /* Grid items get an implicit min-width: auto, which stops them shrinking
+     below their content's intrinsic width -- without this override, the
+     label input would refuse to shrink and overflow the row at narrow
+     window widths, defeating the whole point of the 1fr column. */
   min-width: 0;
 }
 
 .num {
-  width: 52px;
+  width: 40px;
+  /* Tighter than the generic input padding -- at 40px wide, a 2-digit value
+     plus the native spinner arrows needs the extra room to avoid clipping. */
+  padding: 6px 2px;
   font-variant-numeric: tabular-nums;
   cursor: ns-resize;
 }
@@ -429,10 +472,17 @@ input:focus {
   color: var(--danger);
 }
 
+.icon.danger {
+  width: 20px;
+  padding: 4px 0;
+}
+
 .icon.arrow {
+  width: 16px;
+  text-align: center;
   font-size: 1rem;
   font-weight: 1000;
-  padding: 3px 1px;
+  padding: 2px 0;
 }
 
 /* Move-up on the first row and move-down on the last have nowhere to go --

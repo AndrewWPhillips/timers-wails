@@ -42,7 +42,7 @@ func main() {
 	timers.window = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            "Timers",
 		Width:            500,
-		Height:           700,
+		Height:           780,
 		MinWidth:         350,
 		MaxWidth:         700,
 		MinHeight:        520,
