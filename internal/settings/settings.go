@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"github.com/andrewwphillips/timers-wails/internal/timer"
 )
@@ -23,6 +24,50 @@ const Version = 1
 type Preset struct {
 	Label   string `json:"label"`
 	Seconds int    `json:"seconds"`
+	// Color is a "#rrggbb" hex string, used for a timer's progress bar and
+	// Pause button. Repaired by Normalise if missing or malformed.
+	Color string `json:"color"`
+}
+
+// PresetColors is the fixed palette a new preset's colour is drawn from.
+// Deliberately mixes bright, light shades with deeper, more saturated ones
+// (rather than 16 colours of similar tone) so entries contrast with each
+// other, not just with the background. It leans on red/rose more than a
+// "safe" palette would, which does put a couple of entries near the alarm's
+// own red/orange (see style.css --alarm/--alarm-bright) -- accepted as a
+// trade-off for having real reds available. The order is shuffled (not
+// grouped by hue) so that consecutive presets -- which get consecutive
+// palette entries -- read as visually distinct rather than a gradient.
+var PresetColors = []string{
+	"#f87171", // red (light)
+	"#22d3ee", // cyan
+	"#fbbf24", // amber
+	"#7c3aed", // violet (deep)
+	"#4ade80", // green
+	"#b91c1c", // red (deep)
+	"#818cf8", // indigo
+	"#a3e635", // lime
+	"#c026d3", // fuchsia (deep)
+	"#2dd4bf", // teal
+	"#fb7185", // rose
+	"#0284c7", // blue (deep)
+	"#f472b6", // pink
+	"#ca8a04", // gold (deep yellow)
+	"#c084fc", // purple
+	"#059669", // emerald (deep)
+}
+
+var hexColorRE = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+// nextPresetColor returns the first palette colour not in use, or the first
+// palette colour at all once every one of the 16 is already taken.
+func nextPresetColor(used map[string]bool) string {
+	for _, c := range PresetColors {
+		if !used[c] {
+			return c
+		}
+	}
+	return PresetColors[0]
 }
 
 // Alarm describes how an expired timer should sound.
@@ -48,11 +93,11 @@ type Settings struct {
 // DefaultPresets are the quick-set buttons a new install starts with.
 func DefaultPresets() []Preset {
 	return []Preset{
-		{Label: "1 min", Seconds: 60},
-		{Label: "5 min", Seconds: 5 * 60},
-		{Label: "15 min", Seconds: 15 * 60},
-		{Label: "1 hour", Seconds: 60 * 60},
-		{Label: "2 hours", Seconds: 2 * 60 * 60},
+		{Label: "1 min", Seconds: 60, Color: PresetColors[0]},
+		{Label: "5 min", Seconds: 5 * 60, Color: PresetColors[1]},
+		{Label: "15 min", Seconds: 15 * 60, Color: PresetColors[2]},
+		{Label: "1 hour", Seconds: 60 * 60, Color: PresetColors[3]},
+		{Label: "2 hours", Seconds: 2 * 60 * 60, Color: PresetColors[4]},
 	}
 }
 
@@ -86,6 +131,26 @@ func (s *Settings) Normalise() {
 	// An empty preset row would leave the user no way back to the defaults.
 	if len(s.Presets) == 0 {
 		s.Presets = DefaultPresets()
+	}
+
+	// Repair a missing or malformed colour (a hand-edited file, or one saved
+	// before this field existed). This deliberately does not force every
+	// preset to have a unique colour -- two presets sharing one because the
+	// user picked it that way are left alone; only a colour that was never
+	// validly set is replaced.
+	used := make(map[string]bool, len(s.Presets))
+	for _, p := range s.Presets {
+		if hexColorRE.MatchString(p.Color) {
+			used[p.Color] = true
+		}
+	}
+	for i, p := range s.Presets {
+		if hexColorRE.MatchString(p.Color) {
+			continue
+		}
+		c := nextPresetColor(used)
+		s.Presets[i].Color = c
+		used[c] = true
 	}
 
 	switch {

@@ -3,10 +3,15 @@ import { ref, watch } from "vue";
 
 import type { Alarm } from "../../bindings/github.com/andrewwphillips/timers-wails/internal/settings";
 import type { Prefs } from "../composables/useTimers";
+import { vDragNumber } from "../directives/dragNumber";
+import { nextColor } from "../lib/colors";
 import { formatDuration, splitDuration, toSeconds } from "../lib/format";
 
 const props = defineProps<{
   preferences: Prefs;
+  /** The fixed palette a new preset's colour is drawn from, fetched from Go
+   *  by the parent (see useTimers.ts) so it is defined in exactly one place. */
+  presetColors: string[];
   /** Opens the native file picker and resolves to the chosen path, or
    *  undefined if the user cancelled it or it failed. Owned by the parent
    *  since it is a thin wrapper over the bound Go call. */
@@ -78,6 +83,7 @@ function requestClose(): void {
 /** A preset broken into editable fields. */
 interface Row {
   label: string;
+  color: string;
   hours: number;
   minutes: number;
   seconds: number;
@@ -95,6 +101,10 @@ watch(
   (prefs) => {
     rows.value = prefs.presets.map((preset) => ({
       label: preset.label,
+      // Guards against a brief invalid value in the native colour input if a
+      // legacy/empty colour is shown before a save round-trips through Go's
+      // own repair logic.
+      color: preset.color || props.presetColors[0] || "",
       ...splitDuration(preset.seconds),
     }));
     volume.value = prefs.alarm.volume;
@@ -114,7 +124,11 @@ function rowSeconds(row: Row): number {
 }
 
 function addRow(): void {
-  rows.value = [...rows.value, { label: "", hours: 0, minutes: 10, seconds: 0 }];
+  const color = nextColor(
+    rows.value.map((r) => r.color),
+    props.presetColors,
+  );
+  rows.value = [...rows.value, { label: "", color, hours: 0, minutes: 10, seconds: 0 }];
 }
 
 function removeRow(index: number): void {
@@ -137,6 +151,7 @@ function save(): void {
       // An empty label is filled in by Go from the duration, so the user does
       // not have to name every preset.
       label: row.label.trim(),
+      color: row.color,
       seconds: rowSeconds(row),
     }))
     .filter((preset) => preset.seconds > 0);
@@ -163,6 +178,7 @@ function clearSound(): void {
       <div class="body">
         <div class="row row-header">
           <h3>Presets</h3>
+          <span></span>
           <span class="col-heading" aria-hidden="true">Hour&nbsp;&nbsp;&nbsp;</span>
           <span class="col-heading" aria-hidden="true">Min&nbsp;&nbsp;&nbsp;</span>
           <span class="col-heading" aria-hidden="true">Sec&nbsp;&nbsp;&nbsp;</span>
@@ -173,9 +189,16 @@ function clearSound(): void {
         <ul class="rows">
           <li v-for="(row, index) in rows" :key="index" class="row">
             <input v-model="row.label" class="label" type="text" maxlength="32" placeholder="Label" />
-            <input v-model="row.hours" class="num" type="number" min="0" max="99" aria-label="Hours" />
-            <input v-model="row.minutes" class="num" type="number" min="0" max="59" aria-label="Minutes" />
-            <input v-model="row.seconds" class="num" type="number" min="0" max="59" aria-label="Seconds" />
+            <input
+              v-model="row.color"
+              class="swatch"
+              type="color"
+              title="Preset colour"
+              :aria-label="`Colour for ${row.label || 'preset'}`"
+            />
+            <input v-model="row.hours" v-drag-number class="num" type="number" min="0" max="99" aria-label="Hours" />
+            <input v-model="row.minutes" v-drag-number class="num" type="number" min="0" max="59" aria-label="Minutes" />
+            <input v-model="row.seconds" v-drag-number class="num" type="number" min="0" max="59" aria-label="Seconds" />
             <button
               class="icon arrow"
               title="Move up"
@@ -321,7 +344,7 @@ h3 {
    the alignment off. */
 .row {
   display: grid;
-  grid-template-columns: 1fr 52px 52px 52px 16px 16px 28px;
+  grid-template-columns: 1fr 28px 52px 52px 52px 16px 16px 28px;
   align-items: center;
   gap: 4px;
 }
@@ -360,6 +383,31 @@ input:focus {
 .num {
   width: 52px;
   font-variant-numeric: tabular-nums;
+  cursor: ns-resize;
+}
+
+.num.is-scrubbing {
+  border-color: var(--accent);
+  background: var(--surface-raised);
+}
+
+.swatch {
+  width: 28px;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.swatch::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+.swatch::-webkit-color-swatch {
+  border: none;
+  border-radius: 4px;
 }
 
 .icon {

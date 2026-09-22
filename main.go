@@ -38,13 +38,14 @@ func main() {
 	})
 
 	// Assigned before Run so that the service's tick loop, which starts during
-	// Run, never sees a nil window.
+	// Run, never sees a nil window value.
 	timers.window = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            "Timers",
-		Width:            520,
-		Height:           780,
-		MinWidth:         400,
-		MinHeight:        420,
+		Width:            500,
+		Height:           700,
+		MinWidth:         350,
+		MaxWidth:         700,
+		MinHeight:        520,
 		BackgroundColour: application.NewRGB(17, 18, 23),
 		URL:              "/",
 	})

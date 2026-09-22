@@ -13,6 +13,7 @@ const now = useTicker();
 const {
   timers,
   preferences,
+  presetColors,
   error,
   loading,
   alarming,
@@ -66,8 +67,8 @@ watch(justExpired, async (ids) => {
   card?.scrollIntoView({ behavior: "smooth", block: "nearest" });
 });
 
-async function startPreset(seconds: number, label: string): Promise<void> {
-  await create(0, 0, seconds, label);
+async function startPreset(seconds: number, label: string, color: string): Promise<void> {
+  await create(0, 0, seconds, label, color);
 }
 
 async function onSave(next: typeof preferences.value): Promise<void> {
@@ -162,6 +163,7 @@ onUnmounted(() => {
     <SettingsDialog
       v-if="showSettings"
       :preferences="preferences"
+      :preset-colors="presetColors"
       :pick-alarm-file="pickAlarmFile"
       @save="onSave"
       @close="showSettings = false"

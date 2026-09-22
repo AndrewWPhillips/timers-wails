@@ -43,12 +43,19 @@ const remainingMs = computed(() => {
 const display = computed(() => formatRemaining(remainingMs.value));
 const done = computed(() => progress(remainingMs.value, props.timer.totalMs));
 const total = computed(() => formatDuration(Math.round(props.timer.totalMs / 1000)));
+
+/** The preset colour this timer was started with, if any -- exposed as a CSS
+ *  custom property so the progress bar and Pause button can both read it,
+ *  falling back to the default accent colour when there is none (a timer
+ *  started without a preset, or one created before this field existed). */
+const colorStyle = computed(() => (props.timer.color ? { "--timer-color": props.timer.color } : {}));
 </script>
 
 <template>
   <article
     class="card"
     :class="{ 'is-alarming': timer.alarming, 'is-expired': expired, 'is-paused': paused }"
+    :style="colorStyle"
   >
     <header class="head">
       <h2 class="label">{{ timer.label || total }}</h2>
@@ -67,7 +74,7 @@ const total = computed(() => formatDuration(Math.round(props.timer.totalMs / 100
       <span class="buttons">
         <button @click="emit('restart', timer.id)">Restart</button>
         <button v-if="timer.alarming" class="primary" @click="emit('dismiss', timer.id)">Dismiss</button>
-        <button v-if="running" class="primary" @click="emit('pause', timer.id)">Pause</button>
+        <button v-if="running" class="primary pause" @click="emit('pause', timer.id)">Pause</button>
         <button v-if="paused" class="primary" @click="emit('resume', timer.id)">Resume</button>
       </span>
     </footer>
@@ -179,7 +186,7 @@ const total = computed(() => formatDuration(Math.round(props.timer.totalMs / 100
 
 .fill {
   height: 100%;
-  background: var(--accent);
+  background: var(--timer-color, var(--accent));
   border-radius: 999px;
   /* Matches the 100ms clock, so the bar glides rather than stepping. */
   transition: width 100ms linear;
@@ -222,5 +229,17 @@ button.primary {
 
 button.primary:hover {
   background: var(--accent-bright);
+}
+
+/* Only Pause takes the preset's colour -- Resume/Dismiss stay the default
+   accent so a paused/alarming card doesn't change colour underneath the
+   user. brightness() gives a generic hover lift that works for any
+   arbitrary user-picked hex, not just the built-in accent. */
+button.primary.pause {
+  background: var(--timer-color, var(--accent));
+}
+
+button.primary.pause:hover {
+  filter: brightness(1.15);
 }
 </style>

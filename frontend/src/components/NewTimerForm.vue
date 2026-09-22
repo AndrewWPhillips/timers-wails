@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 
+import { vDragNumber } from "../directives/dragNumber";
 import { formatDuration, toSeconds } from "../lib/format";
 
 const emit = defineEmits<{
@@ -34,7 +35,7 @@ function submit(): void {
   <form class="form" @submit.prevent="submit">
     <div class="row">
       <label class="field grow">
-        <input v-model="label" type="text" maxlength="60" placeholder="Describe what you want to time (optional)" />
+        <input v-model="label" type="text" maxlength="60" placeholder="Describe what you want to time (optional)." />
       </label>
     </div>
 
@@ -42,15 +43,15 @@ function submit(): void {
       <div class="fields">
         <label class="field time">
           <span>Hour</span>
-          <input v-model="hours" type="number" min="0" max="99" inputmode="numeric" />
+          <input v-model="hours" v-drag-number type="number" min="0" max="99" inputmode="numeric" />
         </label>
         <label class="field time">
           <span>Min</span>
-          <input v-model="minutes" type="number" min="0" inputmode="numeric" />
+          <input v-model="minutes" v-drag-number type="number" min="0" inputmode="numeric" />
         </label>
         <label class="field time">
           <span>Sec</span>
-          <input v-model="seconds" type="number" min="0" inputmode="numeric" />
+          <input v-model="seconds" v-drag-number type="number" min="0" inputmode="numeric" />
         </label>
       </div>
 
@@ -125,6 +126,15 @@ input {
 input:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+.field.time input {
+  cursor: ns-resize;
+}
+
+.field.time input.is-scrubbing {
+  border-color: var(--accent);
+  background: var(--surface-raised);
 }
 
 .start {

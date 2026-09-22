@@ -4,7 +4,7 @@ import type { Preset } from "../../bindings/github.com/andrewwphillips/timers-wa
 defineProps<{ presets: Preset[] }>();
 
 const emit = defineEmits<{
-  start: [seconds: number, label: string];
+  start: [seconds: number, label: string, color: string];
   edit: [];
 }>();
 </script>
@@ -15,7 +15,7 @@ const emit = defineEmits<{
       v-for="preset in presets"
       :key="`${preset.label}-${preset.seconds}`"
       class="preset"
-      @click="emit('start', preset.seconds, preset.label)"
+      @click="emit('start', preset.seconds, preset.label, preset.color)"
     >
       {{ preset.label }}
     </button>

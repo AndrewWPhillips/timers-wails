@@ -26,7 +26,7 @@ func TestCreateValidation(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			m := New()
-			_, err := m.Create(tc.d, "", base)
+			_, err := m.Create(tc.d, "", "", base)
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("Create(%v) error = %v, want %v", tc.d, err, tc.want)
 			}
@@ -37,7 +37,7 @@ func TestCreateValidation(t *testing.T) {
 func TestCreateStartsRunning(t *testing.T) {
 	m := New()
 
-	got, err := m.Create(5*time.Minute, "tea", base)
+	got, err := m.Create(5*time.Minute, "tea", "", base)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestCreateStartsRunning(t *testing.T) {
 
 func TestRemainingIsDerivedWhileRunning(t *testing.T) {
 	m := New()
-	created, err := m.Create(time.Minute, "", base)
+	created, err := m.Create(time.Minute, "", "", base)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestRemainingIsDerivedWhileRunning(t *testing.T) {
 
 func TestPauseAndResumePreserveRemaining(t *testing.T) {
 	m := New()
-	created, _ := m.Create(time.Minute, "", base)
+	created, _ := m.Create(time.Minute, "", "", base)
 
 	paused, err := m.Pause(created.ID, base.Add(20*time.Second))
 	if err != nil {
@@ -124,7 +124,7 @@ func TestPauseAndResumePreserveRemaining(t *testing.T) {
 
 func TestPauseResumeWrongState(t *testing.T) {
 	m := New()
-	created, _ := m.Create(time.Minute, "", base)
+	created, _ := m.Create(time.Minute, "", "", base)
 
 	if _, err := m.Resume(created.ID, base); !errors.Is(err, ErrNotPaused) {
 		t.Errorf("Resume on running timer error = %v, want %v", err, ErrNotPaused)
@@ -160,8 +160,8 @@ func TestUnknownIDIsNotFound(t *testing.T) {
 
 func TestTickExpiresDueTimersOnce(t *testing.T) {
 	m := New()
-	short, _ := m.Create(time.Minute, "short", base)
-	long, _ := m.Create(time.Hour, "long", base)
+	short, _ := m.Create(time.Minute, "short", "", base)
+	long, _ := m.Create(time.Hour, "long", "", base)
 
 	if fired := m.Tick(base.Add(30 * time.Second)); len(fired) != 0 {
 		t.Fatalf("Tick before any deadline fired %d timers, want 0", len(fired))
@@ -200,10 +200,10 @@ func TestTickExpiresDueTimersOnce(t *testing.T) {
 // next tick, not just one.
 func TestTickAfterSleepExpiresEverythingOverdue(t *testing.T) {
 	m := New()
-	m.Create(time.Minute, "a", base)
-	m.Create(2*time.Minute, "b", base)
-	m.Create(3*time.Minute, "c", base)
-	m.Create(time.Hour, "d", base)
+	m.Create(time.Minute, "a", "", base)
+	m.Create(2*time.Minute, "b", "", base)
+	m.Create(3*time.Minute, "c", "", base)
+	m.Create(time.Hour, "d", "", base)
 
 	fired := m.Tick(base.Add(10 * time.Minute))
 	if len(fired) != 3 {
@@ -218,7 +218,7 @@ func TestTickAfterSleepExpiresEverythingOverdue(t *testing.T) {
 
 func TestPausedTimerNeverExpires(t *testing.T) {
 	m := New()
-	created, _ := m.Create(time.Minute, "", base)
+	created, _ := m.Create(time.Minute, "", "", base)
 	if _, err := m.Pause(created.ID, base.Add(10*time.Second)); err != nil {
 		t.Fatalf("Pause: %v", err)
 	}
@@ -230,7 +230,7 @@ func TestPausedTimerNeverExpires(t *testing.T) {
 
 func TestRestartFromExpired(t *testing.T) {
 	m := New()
-	created, _ := m.Create(time.Minute, "", base)
+	created, _ := m.Create(time.Minute, "", "", base)
 	m.Tick(base.Add(time.Minute))
 
 	restartAt := base.Add(2 * time.Hour)
@@ -254,7 +254,7 @@ func TestRestartFromExpired(t *testing.T) {
 
 func TestDismissSilencesButKeepsTimer(t *testing.T) {
 	m := New()
-	created, _ := m.Create(time.Minute, "", base)
+	created, _ := m.Create(time.Minute, "", "", base)
 	m.Tick(base.Add(time.Minute))
 
 	if !m.Alarming() {
@@ -281,9 +281,9 @@ func TestDismissSilencesButKeepsTimer(t *testing.T) {
 
 func TestDeleteAndListOrder(t *testing.T) {
 	m := New()
-	a, _ := m.Create(time.Minute, "a", base)
-	b, _ := m.Create(time.Minute, "b", base)
-	c, _ := m.Create(time.Minute, "c", base)
+	a, _ := m.Create(time.Minute, "a", "", base)
+	b, _ := m.Create(time.Minute, "b", "", base)
+	c, _ := m.Create(time.Minute, "c", "", base)
 
 	if err := m.Delete(b.ID); err != nil {
 		t.Fatalf("Delete: %v", err)
@@ -362,7 +362,7 @@ func TestRestoreExpiresWhatElapsedWhileClosed(t *testing.T) {
 
 func TestRestoreReplacesPreviousContents(t *testing.T) {
 	m := New()
-	m.Create(time.Minute, "stale", base)
+	m.Create(time.Minute, "stale", "", base)
 
 	m.Restore([]Timer{{
 		ID: "fresh", TotalMS: 1000, RemainingMS: 1000,
@@ -378,8 +378,8 @@ func TestRestoreReplacesPreviousContents(t *testing.T) {
 
 func TestSnapshotRoundTripsThroughRestore(t *testing.T) {
 	m := New()
-	m.Create(time.Hour, "a", base)
-	paused, _ := m.Create(time.Hour, "b", base)
+	m.Create(time.Hour, "a", "", base)
+	paused, _ := m.Create(time.Hour, "b", "", base)
 	m.Pause(paused.ID, base.Add(time.Minute))
 
 	snap := m.Snapshot()

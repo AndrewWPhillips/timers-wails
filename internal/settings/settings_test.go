@@ -47,11 +47,24 @@ func TestDefaultPresetsMatchTheSpecifiedTimes(t *testing.T) {
 	}
 }
 
+func TestDefaultPresetsHaveDistinctValidColors(t *testing.T) {
+	seen := map[string]bool{}
+	for i, p := range DefaultPresets() {
+		if !hexColorRE.MatchString(p.Color) {
+			t.Errorf("preset %d Color = %q, not a valid hex colour", i, p.Color)
+		}
+		if seen[p.Color] {
+			t.Errorf("preset %d Color = %q reused by an earlier default preset", i, p.Color)
+		}
+		seen[p.Color] = true
+	}
+}
+
 func TestSaveLoadRoundTrip(t *testing.T) {
 	s := storeInTempDir(t)
 
 	want := Settings{
-		Presets: []Preset{{Label: "Brew", Seconds: 210}},
+		Presets: []Preset{{Label: "Brew", Seconds: 210, Color: "#2dd4bf"}},
 		Alarm:   Alarm{SoundFile: `C:\sounds\gong.wav`, Volume: 0.4},
 		Timers: []timer.Timer{{
 			ID: "abc", Label: "pasta", TotalMS: 600000, RemainingMS: 600000,
@@ -225,6 +238,54 @@ func TestNormalise(t *testing.T) {
 			check: func(t *testing.T, s Settings) {
 				if s.Timers == nil {
 					t.Error("Timers is nil, want an empty slice")
+				}
+			},
+		},
+		{
+			name: "fills in a missing colour",
+			in:   Settings{Presets: []Preset{{Label: "ok", Seconds: 60, Color: ""}}},
+			check: func(t *testing.T, s Settings) {
+				if !hexColorRE.MatchString(s.Presets[0].Color) {
+					t.Errorf("Color = %q, want a filled-in hex colour", s.Presets[0].Color)
+				}
+			},
+		},
+		{
+			name: "replaces a malformed colour",
+			in:   Settings{Presets: []Preset{{Label: "ok", Seconds: 60, Color: "not-a-color"}}},
+			check: func(t *testing.T, s Settings) {
+				if !hexColorRE.MatchString(s.Presets[0].Color) {
+					t.Errorf("Color = %q, want it replaced with a valid hex colour", s.Presets[0].Color)
+				}
+			},
+		},
+		{
+			name: "leaves a deliberately shared colour alone",
+			in: Settings{Presets: []Preset{
+				{Label: "a", Seconds: 60, Color: "#ffffff"},
+				{Label: "b", Seconds: 120, Color: "#ffffff"},
+			}},
+			check: func(t *testing.T, s Settings) {
+				if s.Presets[0].Color != "#ffffff" || s.Presets[1].Color != "#ffffff" {
+					t.Errorf("Colors = %+v, want the shared custom colour left untouched", s.Presets)
+				}
+			},
+		},
+		{
+			name: "assigns distinct colours when several presets are all missing one",
+			in: Settings{Presets: []Preset{
+				{Label: "a", Seconds: 60}, {Label: "b", Seconds: 120}, {Label: "c", Seconds: 180},
+			}},
+			check: func(t *testing.T, s Settings) {
+				seen := map[string]bool{}
+				for _, p := range s.Presets {
+					if !hexColorRE.MatchString(p.Color) {
+						t.Errorf("Color = %q, not a valid hex colour", p.Color)
+					}
+					if seen[p.Color] {
+						t.Errorf("Color %q reused, want distinct defaults", p.Color)
+					}
+					seen[p.Color] = true
 				}
 			},
 		},

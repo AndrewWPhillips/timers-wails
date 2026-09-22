@@ -23,10 +23,11 @@ import * as $models from "./models.js";
 /**
  * CreateTimer starts a new timer for the given duration. Minutes and seconds
  * are not limited to 59, so a preset of 7200 seconds can be passed straight
- * through without the caller converting it first.
+ * through without the caller converting it first. color is the originating
+ * preset's colour, or "" for a timer started without one.
  */
-export function CreateTimer(hours: number, minutes: number, seconds: number, label: string): $CancellablePromise<timer$0.Timer> {
-    return $Call.ByID(4113711277, hours, minutes, seconds, label);
+export function CreateTimer(hours: number, minutes: number, seconds: number, label: string, color: string): $CancellablePromise<timer$0.Timer> {
+    return $Call.ByID(4113711277, hours, minutes, seconds, label, color);
 }
 
 /**
@@ -71,6 +72,16 @@ export function PauseTimer(id: string): $CancellablePromise<timer$0.Timer> {
  */
 export function PickAlarmFile(): $CancellablePromise<string> {
     return $Call.ByID(2033512328);
+}
+
+/**
+ * PresetColors returns the fixed palette a new preset's colour is drawn
+ * from. Go is the only place this list is defined -- the frontend fetches it
+ * rather than keeping its own hardcoded copy, which had drifted out of sync
+ * with this one in practice.
+ */
+export function PresetColors(): $CancellablePromise<string[] | null> {
+    return $Call.ByID(864798159);
 }
 
 /**

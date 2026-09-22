@@ -185,13 +185,14 @@ func (s *TimerService) persist() {
 
 // CreateTimer starts a new timer for the given duration. Minutes and seconds
 // are not limited to 59, so a preset of 7200 seconds can be passed straight
-// through without the caller converting it first.
-func (s *TimerService) CreateTimer(hours, minutes, seconds int, label string) (timer.Timer, error) {
+// through without the caller converting it first. color is the originating
+// preset's colour, or "" for a timer started without one.
+func (s *TimerService) CreateTimer(hours, minutes, seconds int, label, color string) (timer.Timer, error) {
 	d := time.Duration(hours)*time.Hour +
 		time.Duration(minutes)*time.Minute +
 		time.Duration(seconds)*time.Second
 
-	t, err := s.manager.Create(d, label, time.Now())
+	t, err := s.manager.Create(d, label, color, time.Now())
 	if err != nil {
 		return timer.Timer{}, err
 	}
@@ -259,6 +260,14 @@ func (s *TimerService) GetPreferences() Preferences {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return Preferences{Presets: s.cfg.Presets, Alarm: s.cfg.Alarm}
+}
+
+// PresetColors returns the fixed palette a new preset's colour is drawn
+// from. Go is the only place this list is defined -- the frontend fetches it
+// rather than keeping its own hardcoded copy, which had drifted out of sync
+// with this one in practice.
+func (s *TimerService) PresetColors() []string {
+	return settings.PresetColors
 }
 
 // SavePreferences stores new presets and alarm settings and returns them as

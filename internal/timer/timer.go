@@ -65,6 +65,12 @@ type Timer struct {
 	// It is separate from State so that a dismissed timer can stay visible at
 	// zero without the alarm restarting whenever the list is re-read.
 	Alarming bool `json:"alarming"`
+	// Color is copied from the preset that created this timer, at creation
+	// time -- it is not looked up live, so editing or deleting the preset
+	// later cannot change the colour of a timer already running. Empty for a
+	// timer created without a preset (or one created before this field
+	// existed); the frontend falls back to its default colour in that case.
+	Color string `json:"color"`
 }
 
 // Remaining returns the time left at now, never negative.
@@ -102,8 +108,9 @@ func newID() string {
 }
 
 // Create adds a new timer and starts it running immediately, which is what the
-// user means by "set a timer".
-func (m *Manager) Create(d time.Duration, label string, now time.Time) (Timer, error) {
+// user means by "set a timer". color is copied from the originating preset,
+// if any, and is otherwise the empty string.
+func (m *Manager) Create(d time.Duration, label, color string, now time.Time) (Timer, error) {
 	if d <= 0 {
 		return Timer{}, ErrBadDuration
 	}
@@ -117,6 +124,7 @@ func (m *Manager) Create(d time.Duration, label string, now time.Time) (Timer, e
 	t := &Timer{
 		ID:          newID(),
 		Label:       label,
+		Color:       color,
 		TotalMS:     d.Milliseconds(),
 		RemainingMS: d.Milliseconds(),
 		EndsAtMS:    now.Add(d).UnixMilli(),

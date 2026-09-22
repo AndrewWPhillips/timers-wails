@@ -5,7 +5,7 @@
 [![Last commit](https://img.shields.io/github/last-commit/AndrewWPhillips/timers-wails)](https://github.com/AndrewWPhillips/timers-wails/commits/main)
 [![License: MIT](https://img.shields.io/github/license/AndrewWPhillips/timers-wails)](LICENSE)
 [![Wails v3](https://img.shields.io/badge/Wails-v3-red)](https://v3.wails.io)
-[![Platform](https://img.shields.io/badge/platform-Windows-blue)](#development)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-blue)](#development)
 
 I wrote this countdown timer to see how easy it is to do in Go and because
 I have never been happy with the Windows timer, nor any timer app I have tried
@@ -15,13 +15,17 @@ on Linux or Android.
 https://github.com/AndrewWPhillips/timers.  This new version instead uses
 "Wails" version 3 which works really well.)
 
-Specifically, the features I want are:
-* simple to start a new timer
-* any number of timers running simultaneously
+## Features
+
+Specifically, the features I have always wanted is to be able to:
+* simply and quickly start a new timer
+* have any number of timers running simultaneously
 * configure any number of named presets
-* resume timers after program/OS stop and restart
+* have timers resume after program/OS restart
 * make it obvious when a timer has finished
-* but don't interrupt what I am doing, (no "bring to front")
+* but alarms must NEVER interrupt, (no "bring to front")
+
+![Screen Shot showing timers running](./screen_shot.png)
 
 ## Development
 

@@ -31,6 +31,9 @@ export interface Prefs {
 export function useTimers() {
   const timers = ref<Timer[]>([]);
   const preferences = ref<Prefs>({ presets: [], alarm: { soundFile: "", volume: 0.7, muted: false } });
+  /** The fixed palette a new preset's colour is drawn from. Fetched from Go
+   *  (the only place it is defined) rather than hardcoded here too. */
+  const presetColors = ref<string[]>([]);
   const error = ref("");
   const loading = ref(true);
 
@@ -73,12 +76,20 @@ export function useTimers() {
     if (prefs !== undefined) {
       preferences.value = { presets: prefs.presets ?? [], alarm: prefs.alarm };
     }
+    const colors = await attempt(() => TimerService.PresetColors());
+    presetColors.value = colors ?? [];
     await refresh();
     loading.value = false;
   }
 
-  async function create(hours: number, minutes: number, seconds: number, label: string): Promise<boolean> {
-    const created = await attempt(() => TimerService.CreateTimer(hours, minutes, seconds, label));
+  async function create(
+    hours: number,
+    minutes: number,
+    seconds: number,
+    label: string,
+    color = "",
+  ): Promise<boolean> {
+    const created = await attempt(() => TimerService.CreateTimer(hours, minutes, seconds, label, color));
     if (created === undefined) {
       return false;
     }
@@ -150,6 +161,7 @@ export function useTimers() {
   return {
     timers,
     preferences,
+    presetColors,
     error,
     loading,
     alarming,

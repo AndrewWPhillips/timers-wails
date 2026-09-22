@@ -29,4 +29,10 @@ export interface Alarm {
 export interface Preset {
     "label": string;
     "seconds": number;
+
+    /**
+     * Color is a "#rrggbb" hex string, used for a timer's progress bar and
+     * Pause button. Repaired by Normalise if missing or malformed.
+     */
+    "color": string;
 }
