@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 
 import type { Alarm } from "../../bindings/github.com/andrewwphillips/timers-wails/internal/settings";
 import type { Prefs } from "../composables/useTimers";
@@ -16,6 +16,8 @@ const props = defineProps<{
    *  undefined if the user cancelled it or it failed. Owned by the parent
    *  since it is a thin wrapper over the bound Go call. */
   pickAlarmFile: () => Promise<string | undefined>;
+  /** True while a Test preview is playing, so the Test button offers Stop. */
+  testing: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -25,6 +27,7 @@ const emit = defineEmits<{
   // Test always previews what is currently on screen -- including edits that
   // have not been saved yet.
   test: [alarm: Alarm];
+  "stop-test": [];
 }>();
 
 /**
@@ -90,9 +93,65 @@ interface Row {
 }
 
 const rows = ref<Row[]>([]);
-const volume = ref(0.7);
+const startVolume = ref(0.8);
+const endVolume = ref(0.8);
+const rampSeconds = ref(60);
+/** Start and end volume are equal, so the volume is constant and the ramp
+ *  duration has no effect. (Start can never exceed end, so >= only ever
+ *  matches equal values; both are rounded to 2dp, so the compare is exact.) */
+const noRise = computed(() => startVolume.value >= endVolume.value);
 const muted = ref(false);
 const soundFile = ref("");
+
+/** Slider granularity, and the lowest end volume (matches settings.VolumeStep
+ *  in Go, which enforces the same on save). */
+const volumeStep = 0.05;
+const maxRampSeconds = 600;
+
+const round2 = (v: number) => Math.round(v * 100) / 100;
+
+/**
+ * The start volume may equal the end volume but never exceed it. Rather than
+ * block a drag at the other slider, the other slider is pushed along:
+ * dragging start above end carries end up with it, and dragging end below
+ * start carries start down.
+ */
+function onStartVolume(event: Event): void {
+  const v = round2(Number((event.target as HTMLInputElement).value));
+  startVolume.value = v;
+  if (endVolume.value < v) {
+    endVolume.value = Math.max(v, volumeStep);
+  }
+}
+
+/** The end volume never goes below one step -- an end of zero would just be
+ *  a silent alarm, which is what the Silent checkbox is for. The clamped value
+ *  is written back to the slider: if it leaves the model unchanged, Vue has
+ *  nothing to re-render and the thumb would stay where it was dragged. */
+function onEndVolume(event: Event): void {
+  const input = event.target as HTMLInputElement;
+  const v = Math.max(volumeStep, round2(Number(input.value)));
+  endVolume.value = v;
+  input.value = String(v);
+  if (startVolume.value > v) {
+    startVolume.value = v;
+  }
+}
+
+function rampValue(): number {
+  const n = Number(rampSeconds.value);
+  return Number.isFinite(n) ? Math.min(maxRampSeconds, Math.max(0, Math.floor(n))) : 0;
+}
+
+function alarmValues(): Alarm {
+  return {
+    soundFile: soundFile.value,
+    startVolume: startVolume.value,
+    endVolume: endVolume.value,
+    rampSeconds: rampValue(),
+    muted: muted.value,
+  };
+}
 
 /** Reload the form whenever the stored preferences change, including after a
  *  save, so the user sees the values as they were actually stored. */
@@ -107,7 +166,9 @@ watch(
       color: preset.color || props.presetColors[0] || "",
       ...splitDuration(preset.seconds),
     }));
-    volume.value = prefs.alarm.volume;
+    startVolume.value = prefs.alarm.startVolume;
+    endVolume.value = prefs.alarm.endVolume;
+    rampSeconds.value = prefs.alarm.rampSeconds;
     muted.value = prefs.alarm.muted;
     soundFile.value = prefs.alarm.soundFile;
   },
@@ -156,10 +217,7 @@ function save(): void {
     }))
     .filter((preset) => preset.seconds > 0);
 
-  emit("save", {
-    presets,
-    alarm: { soundFile: soundFile.value, volume: volume.value, muted: muted.value },
-  });
+  emit("save", { presets, alarm: alarmValues() });
 }
 
 function clearSound(): void {
@@ -226,31 +284,79 @@ function clearSound(): void {
           No saved presets found - using the default presets.
         </p>
 
-        <h3>Alarm</h3>
+        <!-- Silent sits beside the heading, above everything it disables, so
+             it can't be switched on yet scrolled out of sight below them. -->
+        <div class="alarm-head">
+          <h3>Alarm</h3>
+          <label class="check">
+            <input v-model="muted" type="checkbox" />
+            <span>Silent &mdash; flash only, no sound</span>
+          </label>
+        </div>
         <div class="sound">
           <p class="current">
             <template v-if="soundFile">{{ soundFile }}</template>
             <template v-else>Built-in beep</template>
           </p>
           <div class="sound-actions">
-            <button :disabled="pickingSound" @click="onChooseSound">
+            <button :disabled="pickingSound || muted" @click="onChooseSound">
               {{ pickingSound ? "Choosing…" : "Choose sound…" }}
             </button>
-            <button v-if="soundFile" @click="clearSound">Use beep</button>
-            <button @click="emit('test', { soundFile, volume, muted })">Test</button>
+            <button v-if="soundFile" :disabled="muted" @click="clearSound">Use beep</button>
+            <button v-if="testing" @click="emit('stop-test')">Stop</button>
+            <button v-else :disabled="muted" @click="emit('test', alarmValues())">Test</button>
           </div>
         </div>
 
-        <label class="volume">
-          <span>Volume</span>
-          <input v-model.number="volume" type="range" min="0.05" max="1" step="0.05" />
-          <output>{{ Math.round(volume * 100) }}%</output>
-        </label>
+        <!-- Silent makes every control here meaningless, so the whole block is
+             disabled and greyed out, not just the sliders. -->
+        <div class="levels" :class="{ disabled: muted }">
+          <label for="start-volume">Start volume</label>
+          <input
+            id="start-volume"
+            :value="startVolume"
+            type="range"
+            min="0"
+            max="1"
+            :step="volumeStep"
+            :disabled="muted"
+            @input="onStartVolume"
+          />
+          <output for="start-volume">{{ Math.round(startVolume * 100) }}%</output>
 
-        <label class="check">
-          <input v-model="muted" type="checkbox" />
-          <span>Silent &mdash; flash only, no sound</span>
-        </label>
+          <label for="end-volume">End volume</label>
+          <input
+            id="end-volume"
+            :value="endVolume"
+            type="range"
+            min="0"
+            max="1"
+            :step="volumeStep"
+            :disabled="muted"
+            @input="onEndVolume"
+          />
+          <output for="end-volume">{{ Math.round(endVolume * 100) }}%</output>
+
+          <!-- With equal volumes there is nothing to rise, so the ramp is
+               disabled too. Only dimmed here when not muted: when muted the
+               whole block is already dimmed, and dimming again would compound. -->
+          <label for="ramp-seconds" :class="{ dim: noRise && !muted }">Rise over</label>
+          <span class="ramp" :class="{ dim: noRise && !muted }">
+            <input
+              id="ramp-seconds"
+              v-model.number="rampSeconds"
+              v-drag-number
+              class="ramp-input"
+              type="number"
+              min="0"
+              :max="maxRampSeconds"
+              inputmode="numeric"
+              :disabled="muted || noRise"
+            />
+            <span>seconds</span>
+          </span>
+          <span></span>
+        </div>
       </div>
 
       <footer class="foot">
@@ -541,32 +647,75 @@ input:focus {
   flex-wrap: wrap;
 }
 
-.volume {
-  display: flex;
+/* Label | control | value, as a grid so the three rows' sliders and values
+   line up with each other. */
+.levels {
+  display: grid;
+  grid-template-columns: auto 1fr 42px;
   align-items: center;
-  gap: 10px;
+  gap: 8px 10px;
   margin-top: 14px;
   font-size: 0.82rem;
   color: var(--muted);
 }
 
-.volume input {
-  flex: 1;
+.levels input[type="range"] {
+  width: 100%;
+  min-width: 0;
   padding: 0;
 }
 
-.volume output {
+.levels output {
   font-variant-numeric: tabular-nums;
   color: var(--text);
-  width: 42px;
   text-align: right;
+}
+
+.ramp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ramp-input {
+  width: 56px;
+  padding: 4px 4px;
+  font-variant-numeric: tabular-nums;
+  cursor: ns-resize;
+}
+
+/* Silent is ticked: none of these have any effect, so grey out the whole
+   block, not just the inputs, so the values don't look live either. */
+.levels.disabled {
+  opacity: 0.4;
+}
+
+.levels input:disabled {
+  cursor: default;
+}
+
+.levels .dim {
+  opacity: 0.4;
+}
+
+/* Takes over the h3's usual margins so the heading and the Silent checkbox
+   share one line (wrapping only if the window is very narrow). */
+.alarm-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  margin: 18px 0 8px;
+}
+
+.alarm-head h3 {
+  margin: 0;
 }
 
 .check {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 12px;
   font-size: 0.82rem;
   color: var(--muted);
 }

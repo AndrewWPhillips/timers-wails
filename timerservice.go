@@ -102,6 +102,9 @@ func (s *TimerService) ServiceStartup(_ context.Context, _ application.ServiceOp
 	s.cfg = cfg
 	s.mu.Unlock()
 
+	// The window has not been created yet, but the screens are now known.
+	s.keepWindowOnScreen(cfg.Window)
+
 	// Anything whose deadline passed while the app was closed comes back marked
 	// as alarming. No event is emitted for it: the frontend has not subscribed
 	// yet at this point, so it picks these up from the initial ListTimers

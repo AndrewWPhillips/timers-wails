@@ -5,7 +5,7 @@ import NewTimerForm from "./components/NewTimerForm.vue";
 import PresetBar from "./components/PresetBar.vue";
 import SettingsDialog from "./components/SettingsDialog.vue";
 import TimerCard from "./components/TimerCard.vue";
-import { startAlarm, stopAlarm, unlockAudio } from "./composables/useAlarm";
+import { startAlarm, stopAlarm, unlockAudio, type AlarmOptions } from "./composables/useAlarm";
 import { useTicker } from "./composables/useTicker";
 import { useTimers } from "./composables/useTimers";
 
@@ -32,11 +32,14 @@ const {
 const showSettings = ref(false);
 const cards = ref<HTMLElement | null>(null);
 
-function alarmOptions() {
+function alarmOptions(): AlarmOptions {
+  const alarm = preferences.value.alarm;
   return {
-    volume: preferences.value.alarm.volume,
-    muted: preferences.value.alarm.muted,
-    soundFile: preferences.value.alarm.soundFile,
+    startVolume: alarm.startVolume,
+    endVolume: alarm.endVolume,
+    rampSeconds: alarm.rampSeconds,
+    muted: alarm.muted,
+    soundFile: alarm.soundFile,
   };
 }
 
@@ -73,30 +76,52 @@ async function startPreset(seconds: number, label: string, color: string): Promi
 
 async function onSave(next: typeof preferences.value): Promise<void> {
   if (await savePreferences(next)) {
-    showSettings.value = false;
+    closeSettings();
   }
 }
 
+function closeSettings(): void {
+  stopTest();
+  showSettings.value = false;
+}
+
+/** How long a Test keeps playing once the ramp has reached full volume. */
+const testTailMs = 3000;
+
 let testTimeout: ReturnType<typeof setTimeout> | null = null;
+
+/** True while a Test preview is playing, so the dialog can offer Stop. */
+const testing = ref(false);
 
 /**
  * Plays a preview using whatever is currently on screen in the settings
  * dialog, not the last-saved preferences -- otherwise Test would keep
  * previewing stale values until the user hits Save and reopens the dialog.
- * Always audible even if "Silent" is ticked, since previewing is the point.
+ * It runs for the whole ramp plus a few seconds so the rise can be heard --
+ * unless start and end volume are equal, when there is no rise to hear -- and
+ * the dialog shows Stop in the meantime.
  */
-function testAlarm(alarm: { soundFile: string; volume: number }): void {
-  stopAlarm();
-  startAlarm({ volume: alarm.volume, muted: false, soundFile: alarm.soundFile });
+function testAlarm(alarm: Omit<AlarmOptions, "muted">): void {
+  stopTest();
+  startAlarm({ ...alarm, muted: false });
+  testing.value = true;
+  const rampMs = alarm.startVolume < alarm.endVolume ? alarm.rampSeconds * 1000 : 0;
+  testTimeout = setTimeout(stopTest, rampMs + testTailMs);
+}
+
+function stopTest(): void {
   if (testTimeout !== null) {
     clearTimeout(testTimeout);
+    testTimeout = null;
   }
-  testTimeout = setTimeout(() => {
-    // Never silence a real alarm that started while the sample was playing.
-    if (!alarming.value) {
-      stopAlarm();
-    }
-  }, 3500);
+  if (!testing.value) {
+    return;
+  }
+  testing.value = false;
+  // Never silence a real alarm that started while the sample was playing.
+  if (!alarming.value) {
+    stopAlarm();
+  }
 }
 
 /**
@@ -156,7 +181,8 @@ onUnmounted(() => {
       />
 
       <p v-if="!loading && timers.length === 0" class="empty">
-        No timers yet. Pick a preset above, or set your own.
+        Click and drag the time controls, or<br/>
+        choose a preset from the buttons above.
       </p>
     </section>
 
@@ -165,9 +191,11 @@ onUnmounted(() => {
       :preferences="preferences"
       :preset-colors="presetColors"
       :pick-alarm-file="pickAlarmFile"
+      :testing="testing"
       @save="onSave"
-      @close="showSettings = false"
+      @close="closeSettings"
       @test="testAlarm"
+      @stop-test="stopTest"
     />
   </main>
 </template>

@@ -22,9 +22,37 @@ const customSoundURL = "/alarm/current";
 /** Gap between beeps in the synthesised pattern. */
 const repeatMs = 1400;
 
+/** How often a custom sound's volume is stepped along the ramp. */
+const rampTickMs = 100;
+
 let context: AudioContext | null = null;
 let repeatTimer: ReturnType<typeof setInterval> | null = null;
+let rampTimer: ReturnType<typeof setInterval> | null = null;
 let element: HTMLAudioElement | null = null;
+
+export interface AlarmOptions {
+  startVolume: number;
+  endVolume: number;
+  /** Seconds to rise from startVolume to endVolume; 0 plays at endVolume. */
+  rampSeconds: number;
+  muted: boolean;
+  soundFile: string;
+}
+
+/** Volume at `elapsedMs` into the alarm: a straight line from start to end
+ *  over the ramp, then flat at end. */
+type Envelope = (elapsedMs: number) => number;
+
+function envelope(options: AlarmOptions): Envelope {
+  const clamp = (v: number) => Math.min(1, Math.max(0, v));
+  const start = clamp(options.startVolume);
+  const end = clamp(options.endVolume);
+  const rampMs = Math.max(0, options.rampSeconds) * 1000;
+  if (rampMs === 0) {
+    return () => end;
+  }
+  return (elapsedMs) => start + (end - start) * Math.min(1, elapsedMs / rampMs);
+}
 
 /**
  * Bumped on every startAlarm call and captured by its async play().catch()
@@ -92,7 +120,11 @@ function scheduleChirp(ctx: AudioContext, at: number, volume: number): void {
   }
 }
 
-function startBeeping(volume: number): void {
+/** Starts the synthesised beep. Each chirp is scheduled at the envelope's
+ *  volume for that moment, so the ramp rises chirp by chirp. `startedAt` is
+ *  when the alarm began, not when beeping did, so a fallback from a failed
+ *  custom sound carries on up the ramp rather than restarting it. */
+function startBeeping(volumeAt: Envelope, startedAt: number): void {
   let ctx: AudioContext;
   try {
     ctx = audioContext();
@@ -104,7 +136,7 @@ function startBeeping(volume: number): void {
     void ctx.resume();
   }
 
-  const chirp = () => scheduleChirp(ctx, ctx.currentTime + 0.02, volume);
+  const chirp = () => scheduleChirp(ctx, ctx.currentTime + 0.02, volumeAt(performance.now() - startedAt));
   chirp();
   repeatTimer = setInterval(chirp, repeatMs);
 }
@@ -116,7 +148,15 @@ function stopBeeping(): void {
   }
 }
 
+function stopRamp(): void {
+  if (rampTimer !== null) {
+    clearInterval(rampTimer);
+    rampTimer = null;
+  }
+}
+
 function stopElement(): void {
+  stopRamp();
   if (element !== null) {
     element.pause();
     element.src = "";
@@ -131,7 +171,7 @@ function stopElement(): void {
  * is the fallback, so a file that has been moved or deleted since it was chosen
  * still leaves the user with an audible alarm.
  */
-export function startAlarm(options: { volume: number; muted: boolean; soundFile: string }): void {
+export function startAlarm(options: AlarmOptions): void {
   if (sounding.value) {
     return;
   }
@@ -142,10 +182,11 @@ export function startAlarm(options: { volume: number; muted: boolean; soundFile:
     return;
   }
 
-  const volume = Math.min(1, Math.max(0, options.volume));
+  const volumeAt = envelope(options);
+  const startedAt = performance.now();
 
   if (options.soundFile === "") {
-    startBeeping(volume);
+    startBeeping(volumeAt, startedAt);
     return;
   }
 
@@ -159,8 +200,21 @@ export function startAlarm(options: { volume: number; muted: boolean; soundFile:
   const url = `${customSoundURL}?f=${encodeURIComponent(options.soundFile)}`;
   const audio = new Audio(url);
   audio.loop = true;
-  audio.volume = volume;
+  audio.volume = volumeAt(0);
   element = audio;
+
+  // HTMLAudioElement.volume cannot be scheduled like a Web Audio gain, so the
+  // ramp is stepped on a timer (fine-grained enough to sound smooth), and the
+  // timer stops once the end volume is reached.
+  if (options.rampSeconds > 0) {
+    rampTimer = setInterval(() => {
+      const elapsed = performance.now() - startedAt;
+      audio.volume = volumeAt(elapsed);
+      if (elapsed >= options.rampSeconds * 1000) {
+        stopRamp();
+      }
+    }, rampTickMs);
+  }
 
   audio.play().catch(() => {
     // A stale rejection from a playback attempt that has since been
@@ -173,7 +227,7 @@ export function startAlarm(options: { volume: number; muted: boolean; soundFile:
     // the timer is never silent.
     stopElement();
     if (sounding.value) {
-      startBeeping(volume);
+      startBeeping(volumeAt, startedAt);
     }
   });
 }

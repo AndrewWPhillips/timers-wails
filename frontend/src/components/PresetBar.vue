@@ -1,7 +1,16 @@
 <script setup lang="ts">
 import type { Preset } from "../../bindings/github.com/andrewwphillips/timers-wails/internal/settings";
+import { textColorOn } from "../lib/colors";
 
 defineProps<{ presets: Preset[] }>();
+
+/** Paints a preset button in its own colour, with readable text on top. Falls
+ *  back to the default button style (via the CSS var() fallbacks) if the
+ *  preset has no valid colour. */
+function presetStyle(preset: Preset): Record<string, string> {
+  const text = textColorOn(preset.color);
+  return text ? { "--preset-bg": preset.color, "--preset-fg": text } : {};
+}
 
 const emit = defineEmits<{
   start: [seconds: number, label: string, color: string];
@@ -15,6 +24,7 @@ const emit = defineEmits<{
       v-for="preset in presets"
       :key="`${preset.label}-${preset.seconds}`"
       class="preset"
+      :style="presetStyle(preset)"
       @click="emit('start', preset.seconds, preset.label, preset.color)"
     >
       {{ preset.label }}
@@ -32,18 +42,18 @@ const emit = defineEmits<{
 }
 
 .preset {
-  background: var(--surface-raised);
-  color: var(--text);
-  border: 1px solid var(--line);
+  background: var(--preset-bg, var(--surface-raised));
+  color: var(--preset-fg, var(--text));
+  border: 1px solid transparent;
   border-radius: 999px;
   padding: 6px 14px;
   font-size: 0.82rem;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .preset:hover {
-  border-color: var(--accent);
-  color: var(--accent-bright);
+  filter: brightness(1.15);
 }
 
 .edit {

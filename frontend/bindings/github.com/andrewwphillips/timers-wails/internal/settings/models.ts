@@ -13,9 +13,15 @@ export interface Alarm {
     "soundFile": string;
 
     /**
-     * Volume is 0..1.
+     * The alarm starts at StartVolume and rises linearly to EndVolume over
+     * RampSeconds, so it can begin gently and get insistent. Volumes are 0..1
+     * and Normalise keeps StartVolume no higher than EndVolume; when they are
+     * equal the volume is simply constant. A RampSeconds of 0 plays at
+     * EndVolume straight away.
      */
-    "volume": number;
+    "startVolume": number;
+    "endVolume": number;
+    "rampSeconds": number;
 
     /**
      * Muted silences the alarm sound; the visual flash still happens.

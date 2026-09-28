@@ -31,7 +31,7 @@ func TestLoadMissingFileReturnsDefaults(t *testing.T) {
 }
 
 func TestDefaultPresetsMatchTheSpecifiedTimes(t *testing.T) {
-	want := []int{60, 300, 900, 3600, 7200}
+	want := []int{60, 300, 900, 3600}
 
 	got := DefaultPresets()
 	if len(got) != len(want) {
@@ -65,11 +65,14 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 
 	want := Settings{
 		Presets: []Preset{{Label: "Brew", Seconds: 210, Color: "#2dd4bf"}},
-		Alarm:   Alarm{SoundFile: `C:\sounds\gong.wav`, Volume: 0.4},
-		Timers: []timer.Timer{{
-			ID: "abc", Label: "pasta", TotalMS: 600000, RemainingMS: 600000,
-			EndsAtMS: 1789000000000, State: timer.StateRunning, CreatedMS: 1788000000000,
-		}},
+		Alarm:   Alarm{SoundFile: `C:\sounds\gong.wav`, StartVolume: 0.1, EndVolume: 0.4, RampSeconds: 20},
+		Timers: []timer.Timer{
+			{
+				ID: "abc", Label: "pasta", TotalMS: 600000, RemainingMS: 600000,
+				EndsAtMS: 1789000000000, State: timer.StateRunning, CreatedMS: 1788000000000,
+			},
+		},
+		Window: &WindowBounds{X: -1200, Y: 40, Width: 520, Height: 800, Maximised: true},
 	}
 
 	if err := s.Save(want); err != nil {
@@ -89,6 +92,38 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	}
 	if len(got.Timers) != 1 || got.Timers[0] != want.Timers[0] {
 		t.Errorf("Timers = %+v, want %+v", got.Timers, want.Timers)
+	}
+	if got.Window == nil || *got.Window != *want.Window {
+		t.Errorf("Window = %+v, want %+v", got.Window, want.Window)
+	}
+}
+
+func TestNormaliseForgetsAnEmptyWindow(t *testing.T) {
+	s := Settings{Presets: DefaultPresets(), Window: &WindowBounds{X: 10, Y: 10, Width: 0, Height: 700}}
+	s.Normalise()
+	if s.Window != nil {
+		t.Errorf("Window = %+v, want nil for a zero-width window", s.Window)
+	}
+}
+
+func TestLoadMigratesLegacyVolume(t *testing.T) {
+	s := storeInTempDir(t)
+	legacy := `{"version":1,"presets":[{"label":"Tea","seconds":180}],` +
+		`"alarm":{"soundFile":"","volume":0.4,"muted":false},"timers":[]}`
+	if err := os.WriteFile(s.Path(), []byte(legacy), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	got, err := s.Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+
+	// The old single volume becomes both start and end volume, so an upgraded
+	// install sounds exactly as it did before.
+	want := Alarm{StartVolume: 0.4, EndVolume: 0.4, RampSeconds: DefaultRampSeconds}
+	if got.Alarm != want {
+		t.Errorf("Alarm = %+v, want %+v", got.Alarm, want)
 	}
 }
 
@@ -177,7 +212,11 @@ func TestNormalise(t *testing.T) {
 	}{
 		{
 			name: "drops presets with no duration",
-			in:   Settings{Presets: []Preset{{Label: "ok", Seconds: 60}, {Label: "bad", Seconds: 0}, {Label: "worse", Seconds: -5}}},
+			in: Settings{
+				Presets: []Preset{
+					{Label: "ok", Seconds: 60}, {Label: "bad", Seconds: 0}, {Label: "worse", Seconds: -5},
+				},
+			},
 			check: func(t *testing.T, s Settings) {
 				if len(s.Presets) != 1 || s.Presets[0].Label != "ok" {
 					t.Errorf("Presets = %+v, want only the valid one", s.Presets)
@@ -206,20 +245,56 @@ func TestNormalise(t *testing.T) {
 			},
 		},
 		{
-			name: "clamps volume above one",
-			in:   Settings{Presets: DefaultPresets(), Alarm: Alarm{Volume: 4}},
+			name: "clamps end volume above one",
+			in:   Settings{Presets: DefaultPresets(), Alarm: Alarm{EndVolume: 4}},
 			check: func(t *testing.T, s Settings) {
-				if s.Alarm.Volume != 1 {
-					t.Errorf("Volume = %v, want 1", s.Alarm.Volume)
+				if s.Alarm.EndVolume != 1 {
+					t.Errorf("EndVolume = %v, want 1", s.Alarm.EndVolume)
 				}
 			},
 		},
 		{
-			name: "replaces a zero volume with the default",
-			in:   Settings{Presets: DefaultPresets(), Alarm: Alarm{Volume: 0}},
+			name: "replaces a zero end volume with the default",
+			in:   Settings{Presets: DefaultPresets(), Alarm: Alarm{EndVolume: 0}},
 			check: func(t *testing.T, s Settings) {
-				if s.Alarm.Volume != 0.7 {
-					t.Errorf("Volume = %v, want 0.7", s.Alarm.Volume)
+				if s.Alarm.EndVolume != DefaultVolume {
+					t.Errorf("EndVolume = %v, want %v", s.Alarm.EndVolume, DefaultVolume)
+				}
+			},
+		},
+		{
+			name: "caps start volume at end volume",
+			in:   Settings{Presets: DefaultPresets(), Alarm: Alarm{StartVolume: 0.9, EndVolume: 0.6}},
+			check: func(t *testing.T, s Settings) {
+				if s.Alarm.StartVolume != 0.6 || s.Alarm.EndVolume != 0.6 {
+					t.Errorf("Start/End = %v/%v, want 0.6/0.6", s.Alarm.StartVolume, s.Alarm.EndVolume)
+				}
+			},
+		},
+		{
+			name: "allows equal start and end volumes",
+			in:   Settings{Presets: DefaultPresets(), Alarm: Alarm{StartVolume: 0.5, EndVolume: 0.5}},
+			check: func(t *testing.T, s Settings) {
+				if s.Alarm.StartVolume != 0.5 || s.Alarm.EndVolume != 0.5 {
+					t.Errorf("Start/End = %v/%v, want 0.5/0.5", s.Alarm.StartVolume, s.Alarm.EndVolume)
+				}
+			},
+		},
+		{
+			name: "clamps a negative start volume to zero",
+			in:   Settings{Presets: DefaultPresets(), Alarm: Alarm{StartVolume: -1, EndVolume: 0.5}},
+			check: func(t *testing.T, s Settings) {
+				if s.Alarm.StartVolume != 0 {
+					t.Errorf("StartVolume = %v, want 0", s.Alarm.StartVolume)
+				}
+			},
+		},
+		{
+			name: "clamps the ramp to 0..MaxRampSeconds",
+			in:   Settings{Presets: DefaultPresets(), Alarm: Alarm{EndVolume: 0.5, RampSeconds: 99999}},
+			check: func(t *testing.T, s Settings) {
+				if s.Alarm.RampSeconds != MaxRampSeconds {
+					t.Errorf("RampSeconds = %d, want %d", s.Alarm.RampSeconds, MaxRampSeconds)
 				}
 			},
 		},
@@ -261,10 +336,12 @@ func TestNormalise(t *testing.T) {
 		},
 		{
 			name: "leaves a deliberately shared colour alone",
-			in: Settings{Presets: []Preset{
-				{Label: "a", Seconds: 60, Color: "#ffffff"},
-				{Label: "b", Seconds: 120, Color: "#ffffff"},
-			}},
+			in: Settings{
+				Presets: []Preset{
+					{Label: "a", Seconds: 60, Color: "#ffffff"},
+					{Label: "b", Seconds: 120, Color: "#ffffff"},
+				},
+			},
 			check: func(t *testing.T, s Settings) {
 				if s.Presets[0].Color != "#ffffff" || s.Presets[1].Color != "#ffffff" {
 					t.Errorf("Colors = %+v, want the shared custom colour left untouched", s.Presets)
@@ -273,9 +350,11 @@ func TestNormalise(t *testing.T) {
 		},
 		{
 			name: "assigns distinct colours when several presets are all missing one",
-			in: Settings{Presets: []Preset{
-				{Label: "a", Seconds: 60}, {Label: "b", Seconds: 120}, {Label: "c", Seconds: 180},
-			}},
+			in: Settings{
+				Presets: []Preset{
+					{Label: "a", Seconds: 60}, {Label: "b", Seconds: 120}, {Label: "c", Seconds: 180},
+				},
+			},
 			check: func(t *testing.T, s Settings) {
 				seen := map[string]bool{}
 				for _, p := range s.Presets {

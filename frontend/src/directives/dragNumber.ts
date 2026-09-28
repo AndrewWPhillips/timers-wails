@@ -46,6 +46,8 @@ function onPointerDown(el: HTMLInputElement, event: PointerEvent): void {
   // Only plain left-button (or primary touch/pen) drags scrub; anything else
   // (right-click, modifier-clicks) is left to default behaviour.
   if (event.button !== 0) return;
+  // A disabled field must not be scrubbable either.
+  if (el.disabled) return;
 
   const state: DragState = {
     startY: event.clientY,

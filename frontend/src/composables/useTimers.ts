@@ -30,7 +30,7 @@ export interface Prefs {
  */
 export function useTimers() {
   const timers = ref<Timer[]>([]);
-  const preferences = ref<Prefs>({ presets: [], alarm: { soundFile: "", volume: 0.7, muted: false } });
+  const preferences = ref<Prefs>({ presets: [], alarm: { soundFile: "", startVolume: 0.8, endVolume: 0.8, rampSeconds: 60, muted: false } });
   /** The fixed palette a new preset's colour is drawn from. Fetched from Go
    *  (the only place it is defined) rather than hardcoded here too. */
   const presetColors = ref<string[]>([]);

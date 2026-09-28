@@ -9,6 +9,7 @@ package settings
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -76,10 +77,47 @@ type Alarm struct {
 	// synthesises a beep instead, so the app always has a working alarm with
 	// no bundled audio asset.
 	SoundFile string `json:"soundFile"`
-	// Volume is 0..1.
-	Volume float64 `json:"volume"`
+	// The alarm starts at StartVolume and rises linearly to EndVolume over
+	// RampSeconds, so it can begin gently and get insistent. Volumes are 0..1
+	// and Normalise keeps StartVolume no higher than EndVolume; when they are
+	// equal the volume is simply constant. A RampSeconds of 0 plays at
+	// EndVolume straight away.
+	StartVolume float64 `json:"startVolume"`
+	EndVolume   float64 `json:"endVolume"`
+	RampSeconds int     `json:"rampSeconds"`
 	// Muted silences the alarm sound; the visual flash still happens.
 	Muted bool `json:"muted"`
+}
+
+// VolumeStep is the granularity of the volume sliders, and the lowest end
+// volume (an end volume of zero would make the alarm silent, which is what
+// Muted is for).
+const VolumeStep = 0.05
+
+// MaxRampSeconds caps how long the alarm takes to reach full volume.
+const MaxRampSeconds = 600
+
+const (
+	DefaultVolume      = 0.8
+	DefaultRampSeconds = 60
+)
+
+// roundVolume snaps v to two decimal places, so repeated repairs cannot build
+// up float noise like 0.6499999999.
+func roundVolume(v float64) float64 {
+	return math.Round(v*100) / 100
+}
+
+// WindowBounds is the main window's position and size when the app last
+// closed, in device-independent pixels, so it reopens where the user left it.
+// If it closed maximised, the bounds are the previously saved normal ones, so
+// un-maximising after a restart returns to them.
+type WindowBounds struct {
+	X         int  `json:"x"`
+	Y         int  `json:"y"`
+	Width     int  `json:"width"`
+	Height    int  `json:"height"`
+	Maximised bool `json:"maximised,omitempty"`
 }
 
 // Settings is the whole persisted document.
@@ -88,6 +126,10 @@ type Settings struct {
 	Presets []Preset      `json:"presets"`
 	Alarm   Alarm         `json:"alarm"`
 	Timers  []timer.Timer `json:"timers"`
+	// Window = window location at last close or nil if this is the 1st run. It is used to
+	// set the main window location when the app is reopened but may be adjusted later (only
+	// for OS=Windows) if the config file settings now have a location outside any screen,
+	Window *WindowBounds `json:"window,omitempty"`
 }
 
 // DefaultPresets are the quick-set buttons a new install starts with.
@@ -96,8 +138,9 @@ func DefaultPresets() []Preset {
 		{Label: "1 min", Seconds: 60, Color: PresetColors[0]},
 		{Label: "5 min", Seconds: 5 * 60, Color: PresetColors[1]},
 		{Label: "15 min", Seconds: 15 * 60, Color: PresetColors[2]},
-		{Label: "1 hour", Seconds: 60 * 60, Color: PresetColors[3]},
-		{Label: "2 hours", Seconds: 2 * 60 * 60, Color: PresetColors[4]},
+		//{Label: "30 min", Seconds: 60 * 60, Color: PresetColors[3]},
+		{Label: "1 hour", Seconds: 60 * 60, Color: PresetColors[4]},
+		//{Label: "2 hours", Seconds: 2 * 60 * 60, Color: PresetColors[5]},
 	}
 }
 
@@ -106,7 +149,7 @@ func Default() Settings {
 	return Settings{
 		Version: Version,
 		Presets: DefaultPresets(),
-		Alarm:   Alarm{Volume: 0.7},
+		Alarm:   Alarm{StartVolume: DefaultVolume, EndVolume: DefaultVolume, RampSeconds: DefaultRampSeconds},
 	}
 }
 
@@ -153,15 +196,66 @@ func (s *Settings) Normalise() {
 		used[c] = true
 	}
 
-	switch {
-	case s.Alarm.Volume <= 0:
-		s.Alarm.Volume = 0.7
-	case s.Alarm.Volume > 1:
-		s.Alarm.Volume = 1
+	s.Alarm.normalise()
+
+	// A zero or negative size can only come from a hand-edited or corrupt
+	// file; forget it and fall back to the default placement.
+	if s.Window != nil && (s.Window.Width <= 0 || s.Window.Height <= 0) {
+		s.Window = nil
 	}
 
 	if s.Timers == nil {
 		s.Timers = []timer.Timer{}
+	}
+}
+
+// normalise keeps the volumes in 0..1 with StartVolume no higher than
+// EndVolume, and the ramp within 0..MaxRampSeconds.
+func (a *Alarm) normalise() {
+	switch {
+	case a.EndVolume <= 0:
+		// Zero is never a valid end volume, so it means "not set".
+		a.EndVolume = DefaultVolume
+	case a.EndVolume < VolumeStep:
+		a.EndVolume = VolumeStep
+	case a.EndVolume > 1:
+		a.EndVolume = 1
+	}
+	a.EndVolume = roundVolume(a.EndVolume)
+
+	if a.StartVolume < 0 {
+		a.StartVolume = 0
+	}
+	if a.StartVolume > a.EndVolume {
+		a.StartVolume = a.EndVolume
+	}
+	a.StartVolume = roundVolume(a.StartVolume)
+
+	switch {
+	case a.RampSeconds < 0:
+		a.RampSeconds = 0
+	case a.RampSeconds > MaxRampSeconds:
+		a.RampSeconds = MaxRampSeconds
+	}
+}
+
+// migrateLegacyAlarm carries over the single "volume" setting from files
+// written before start/end volumes existed. It becomes both the start and end
+// volume, so an upgraded install sounds exactly as it did before; the ramp
+// gets its default, ready for if the user lowers the start volume later.
+func migrateLegacyAlarm(data []byte, s *Settings) {
+	var legacy struct {
+		Alarm struct {
+			Volume *float64 `json:"volume"`
+		} `json:"alarm"`
+	}
+	if json.Unmarshal(data, &legacy) != nil || legacy.Alarm.Volume == nil {
+		return
+	}
+	if s.Alarm.EndVolume == 0 {
+		s.Alarm.StartVolume = *legacy.Alarm.Volume
+		s.Alarm.EndVolume = *legacy.Alarm.Volume
+		s.Alarm.RampSeconds = DefaultRampSeconds
 	}
 }
 
@@ -218,6 +312,7 @@ func (s *Store) Load() (Settings, error) {
 		return Default(), fmt.Errorf("parsing %s: %w", s.path, err)
 	}
 
+	migrateLegacyAlarm(data, &loaded)
 	loaded.Normalise()
 	return loaded, nil
 }

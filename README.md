@@ -7,13 +7,12 @@
 [![Wails v3](https://img.shields.io/badge/Wails-v3-red)](https://v3.wails.io)
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-blue)](#development)
 
-I wrote this countdown timer to see how easy it is to do in Go and because
-I have never been happy with the Windows timer, nor any timer app I have tried
-on Linux or Android.
+I wrote this countdown timer in Go as an experiment, but it is useful. I've never 
+been happy with the Windows timer, nor any timer app I have tried on Linux or Android.
 
-(Many years ago I started a timers app using the Go "Fyne" package - see 
-https://github.com/AndrewWPhillips/timers.  This new version instead uses
-"Wails" version 3 which works really well.)
+I previously tried this 5 years ago using the Go "Fyne" package - see
+https://github.com/AndrewWPhillips/timers.  This one instead uses **Wails**
+version 3 (currently in Beta) which works really well.
 
 ## Features
 
@@ -27,40 +26,28 @@ Specifically, the features I have always wanted is to be able to:
 
 ![Screen Shot showing timers running](./screen_shot.png)
 
+There are other features that Claude added or made it easy to add:
+
+* built-in alarm sound can be overridden using a sound file
+* click and drag with the mouse to quickly set hour/min/sec values 
+* you can assign a different progress bar colour for each preset
+
 ## Development
 
-Claude created this app using Go + [Wails v3](https://v3.wails.io) with a Vue 3 / TypeScript frontend.
+I used Claude Code to create the app using Go (golang) with [Wails v3](https://v3.wails.io) specifying 
+a TypeScript / Vue 3 frontend.
 
-Of course, I have inspected Claude's code, tested and tweaked it.  Note that it has
-only currently been tested on Windows, but I'll try Linux, Mac and maybe Android soon.
+I thoroughly inspected Claude's Go code but left the TS/Vue stuff to Claude.
 
-(One nice thing Cluade thought to add was a built-in alarm sound that can be overridden
-by selecting a sound file.)
+I have tested it on Windows and made some fixes.  I have also tested it on Linux 
+(required upgrading to Ubuntu 24.04 LTS to build).  I might try building an Android
+version soon.
 
 ### Windows version
 
 I did a bit of work to make the alarm work the way I want on Windows.  It flashes the
 window and the taskbar button whether, or not, the window is focused.  I used the cool
 ability of Wails to directly manipulate native windows (HWND) - see flash_windows.go.
-
-## Running
-
-```bash
-wails3 task dev
-```
-
-Build a release binary into `bin/`:
-
-```bash
-wails3 task build
-```
-
-There is also a headless server build, handy for testing the backend in a
-browser without a native window:
-
-```bash
-wails3 task run:server
-```
 
 ## Design
 
@@ -113,3 +100,22 @@ Note that `go build ./...` fails on `build/ios`, which is Wails template
 scaffolding for iOS packaging: a `package main` with no `main` function that is
 only meant to be compiled as part of an iOS build. `wails3 task build` and
 `go test ./...` are unaffected.
+
+## Running
+
+```bash
+wails3 task dev
+```
+
+Build a release binary into `bin/`:
+
+```bash
+wails3 task build
+```
+
+There is also a headless server build, handy for testing the backend in a
+browser without a native window:
+
+```bash
+wails3 task run:server
+```
