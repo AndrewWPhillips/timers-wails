@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, nextTick, ref } from "vue";
 
 import { State } from "../../bindings/github.com/andrewwphillips/timers-wails/internal/timer";
 import type { Timer } from "../../bindings/github.com/andrewwphillips/timers-wails/internal/timer";
-import { formatDuration, formatRemaining, progress } from "../lib/format";
+import { textColorOn } from "../lib/colors";
+import { formatRemaining, progress } from "../lib/format";
 
 const props = defineProps<{
   timer: Timer;
@@ -16,6 +17,7 @@ const emit = defineEmits<{
   resume: [id: string];
   restart: [id: string];
   dismiss: [id: string];
+  rename: [id: string, label: string];
   remove: [id: string];
 }>();
 
@@ -42,13 +44,46 @@ const remainingMs = computed(() => {
 
 const display = computed(() => formatRemaining(remainingMs.value));
 const done = computed(() => progress(remainingMs.value, props.timer.totalMs));
-const total = computed(() => formatDuration(Math.round(props.timer.totalMs / 1000)));
 
-/** The preset colour this timer was started with, if any -- exposed as a CSS
- *  custom property so the progress bar and Pause button can both read it,
- *  falling back to the default accent colour when there is none (a timer
- *  started without a preset, or one created before this field existed). */
-const colorStyle = computed(() => (props.timer.color ? { "--timer-color": props.timer.color } : {}));
+/** The preset colour this timer was started with, if any -- exposed as CSS
+ *  custom properties so the progress bar and the Pause/Resume/Dismiss buttons
+ *  can all read it, along with a dark or white text colour that stays
+ *  readable on it (the palette mixes light and deep colours). With no colour
+ *  existed) the CSS falls back to the default accent with white text. */
+const colorStyle = computed(() => {
+  const fg = textColorOn(props.timer.color);
+  return fg ? { "--timer-color": props.timer.color, "--timer-fg": fg } : {};
+});
+
+/** In-place renaming: clicking the name swaps it for a text box. */
+const editing = ref(false);
+const draft = ref("");
+const labelInput = ref<HTMLInputElement | null>(null);
+
+async function startEdit(): Promise<void> {
+  draft.value = props.timer.label;
+  editing.value = true;
+  await nextTick();
+  labelInput.value?.focus();
+  labelInput.value?.select();
+}
+
+/** Enter or clicking away saves. The guard matters: removing the text box
+ *  after Enter can fire its blur too, which would otherwise save twice. */
+function commit(): void {
+  if (!editing.value) {
+    return;
+  }
+  editing.value = false;
+  const label = draft.value.trim();
+  if (label !== props.timer.label) {
+    emit("rename", props.timer.id, label);
+  }
+}
+
+function cancel(): void {
+  editing.value = false;
+}
 </script>
 
 <template>
@@ -58,7 +93,35 @@ const colorStyle = computed(() => (props.timer.color ? { "--timer-color": props.
     :style="colorStyle"
   >
     <header class="head">
-      <h2 class="label">{{ timer.label || total }}</h2>
+      <h2 class="label">
+        <!-- maxlength matches the new-timer text box; the placeholder matches
+             what a blank name will display. -->
+        <input
+          v-if="editing"
+          ref="labelInput"
+          v-model="draft"
+          class="label-input"
+          type="text"
+          maxlength="60"
+          placeholder="Untitled"
+          aria-label="Timer name"
+          @keydown.enter.prevent="commit"
+          @keydown.esc.prevent="cancel"
+          @blur="commit"
+        />
+        <!-- Fills the whole heading, so clicking anywhere on it renames. A
+             blank name shows a faded "Untitled" rather than nothing, which
+             would leave nothing visible to click to rename it again. -->
+        <button
+          v-else
+          class="label-btn"
+          :class="{ untitled: !timer.label }"
+          title="Click to rename"
+          @click="startEdit"
+        >
+          {{ timer.label || "Untitled" }}
+        </button>
+      </h2>
       <button class="icon" title="Delete timer" aria-label="Delete timer" @click="emit('remove', timer.id)">
         &times;
       </button>
@@ -134,13 +197,59 @@ const colorStyle = computed(() => (props.timer.color ? { "--timer-color": props.
 }
 
 .label {
+  flex: 1;
+  min-width: 0;
   margin: 0;
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--text);
+}
+
+/* The name, as a plain-looking button so it can be clicked (or tabbed to)
+   to rename. */
+.label-btn {
+  display: block;
+  /* Full width of the heading, so a click anywhere on it renames. */
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: text;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.label-btn.untitled {
+  color: var(--muted);
+  font-weight: 400;
+  font-style: italic;
+}
+
+.label-btn:hover,
+.label-btn:focus-visible {
+  outline: none;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.label-input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1px 6px;
+}
+
+.label-input:focus {
+  outline: none;
+  border-color: var(--accent);
 }
 
 .icon {
@@ -208,7 +317,7 @@ const colorStyle = computed(() => (props.timer.color ? { "--timer-color": props.
   gap: 6px;
 }
 
-button:not(.icon) {
+.buttons button:not(.icon) {
   background: var(--surface-raised);
   color: var(--text);
   border: 1px solid transparent;
@@ -218,28 +327,21 @@ button:not(.icon) {
   cursor: pointer;
 }
 
-button:not(.icon):hover {
+.buttons button:not(.icon):hover {
   border-color: var(--line-bright);
 }
 
-button.primary {
-  background: var(--accent);
-  color: #fff;
-}
-
-button.primary:hover {
-  background: var(--accent-bright);
-}
-
-/* Only Pause takes the preset's colour -- Resume/Dismiss stay the default
-   accent so a paused/alarming card doesn't change colour underneath the
-   user. brightness() gives a generic hover lift that works for any
-   arbitrary user-picked hex, not just the built-in accent. */
-button.primary.pause {
+/* Pause, Resume and Dismiss take the timer's preset colour, with text chosen
+   to stay readable on it; Restart keeps the plain style above. Scoped to
+   .buttons like the base rule, so these still win on specificity and source
+   order. brightness() gives a generic hover lift that works for any
+   user-picked colour, not just the built-in accent. */
+.buttons button.primary {
   background: var(--timer-color, var(--accent));
+  color: var(--timer-fg, #fff);
 }
 
-button.primary.pause:hover {
+.buttons button.primary:hover {
   filter: brightness(1.15);
 }
 </style>

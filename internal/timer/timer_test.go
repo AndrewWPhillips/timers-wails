@@ -8,7 +8,7 @@ import (
 
 // base is a fixed reference time. Using a constant instant rather than
 // time.Now keeps every assertion below exact.
-var base = time.Date(2026, 9, 14, 12, 0, 0, 0, time.UTC)
+var base = time.Date(2026, 7, 16, 12, 0, 0, 0, time.UTC)
 
 func TestCreateValidation(t *testing.T) {
 	tests := []struct {
@@ -153,6 +153,9 @@ func TestUnknownIDIsNotFound(t *testing.T) {
 	if _, err := m.Dismiss("nope"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("Dismiss error = %v, want %v", err, ErrNotFound)
 	}
+	if _, err := m.Rename("nope", "x"); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Rename error = %v, want %v", err, ErrNotFound)
+	}
 	if err := m.Delete("nope"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("Delete error = %v, want %v", err, ErrNotFound)
 	}
@@ -279,6 +282,33 @@ func TestDismissSilencesButKeepsTimer(t *testing.T) {
 	}
 }
 
+func TestRenameChangesOnlyTheLabel(t *testing.T) {
+	m := New()
+	created, _ := m.Create(time.Minute, "tea", "#22d3ee", base)
+	paused, err := m.Pause(created.ID, base.Add(20*time.Second))
+	if err != nil {
+		t.Fatalf("Pause: %v", err)
+	}
+
+	renamed, err := m.Rename(created.ID, "green tea")
+	if err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+	if renamed.Label != "green tea" {
+		t.Errorf("Label = %q, want %q", renamed.Label, "green tea")
+	}
+
+	// Everything except the label must be exactly as it was.
+	want := paused
+	want.Label = "green tea"
+	if renamed != want {
+		t.Errorf("Rename changed more than the label:\n got  %+v\n want %+v", renamed, want)
+	}
+	if got := m.List()[0]; got != want {
+		t.Errorf("stored timer = %+v, want %+v", got, want)
+	}
+}
+
 func TestDeleteAndListOrder(t *testing.T) {
 	m := New()
 	a, _ := m.Create(time.Minute, "a", "", base)
@@ -364,11 +394,13 @@ func TestRestoreReplacesPreviousContents(t *testing.T) {
 	m := New()
 	m.Create(time.Minute, "stale", "", base)
 
-	m.Restore([]Timer{{
-		ID: "fresh", TotalMS: 1000, RemainingMS: 1000,
-		EndsAtMS: base.Add(time.Hour).UnixMilli(),
-		State:    StateRunning, CreatedMS: base.UnixMilli(),
-	}}, base)
+	m.Restore([]Timer{
+		{
+			ID: "fresh", TotalMS: 1000, RemainingMS: 1000,
+			EndsAtMS: base.Add(time.Hour).UnixMilli(),
+			State:    StateRunning, CreatedMS: base.UnixMilli(),
+		},
+	}, base)
 
 	got := m.List()
 	if len(got) != 1 || got[0].ID != "fresh" {

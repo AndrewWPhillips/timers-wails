@@ -2,6 +2,7 @@ import { computed, onUnmounted, ref } from "vue";
 import { Events } from "@wailsio/runtime";
 
 import { TimerService } from "../../bindings/github.com/andrewwphillips/timers-wails";
+import type { Preferences } from "../../bindings/github.com/andrewwphillips/timers-wails";
 import type { Alarm, Preset } from "../../bindings/github.com/andrewwphillips/timers-wails/internal/settings";
 import type { Timer } from "../../bindings/github.com/andrewwphillips/timers-wails/internal/timer";
 
@@ -15,6 +16,19 @@ import type { Timer } from "../../bindings/github.com/andrewwphillips/timers-wai
 export interface Prefs {
   presets: Preset[];
   alarm: Alarm;
+  /** Registered to launch at login. Held by the OS, not the settings file. */
+  autostart: boolean;
+  /** False where run-at-startup is unsupported, e.g. the server build. */
+  autostartAvailable: boolean;
+}
+
+function toPrefs(p: Preferences): Prefs {
+  return {
+    presets: p.presets ?? [],
+    alarm: p.alarm,
+    autostart: p.autostart,
+    autostartAvailable: p.autostartAvailable,
+  };
 }
 
 /**
@@ -30,7 +44,12 @@ export interface Prefs {
  */
 export function useTimers() {
   const timers = ref<Timer[]>([]);
-  const preferences = ref<Prefs>({ presets: [], alarm: { soundFile: "", startVolume: 0.8, endVolume: 0.8, rampSeconds: 60, muted: false } });
+  const preferences = ref<Prefs>({
+    presets: [],
+    alarm: { soundFile: "", startVolume: 0.8, endVolume: 0.8, rampSeconds: 60, muted: false },
+    autostart: false,
+    autostartAvailable: false,
+  });
   /** The fixed palette a new preset's colour is drawn from. Fetched from Go
    *  (the only place it is defined) rather than hardcoded here too. */
   const presetColors = ref<string[]>([]);
@@ -74,7 +93,7 @@ export function useTimers() {
     loading.value = true;
     const prefs = await attempt(() => TimerService.GetPreferences());
     if (prefs !== undefined) {
-      preferences.value = { presets: prefs.presets ?? [], alarm: prefs.alarm };
+      preferences.value = toPrefs(prefs);
     }
     const colors = await attempt(() => TimerService.PresetColors());
     presetColors.value = colors ?? [];
@@ -117,6 +136,11 @@ export function useTimers() {
     if (updated !== undefined) replace(updated);
   }
 
+  async function rename(id: string, label: string): Promise<void> {
+    const updated = await attempt(() => TimerService.RenameTimer(id, label));
+    if (updated !== undefined) replace(updated);
+  }
+
   async function remove(id: string): Promise<void> {
     const removed = await attempt(async () => {
       await TimerService.DeleteTimer(id);
@@ -134,7 +158,7 @@ export function useTimers() {
     if (saved === undefined) {
       return false;
     }
-    preferences.value = { presets: saved.presets ?? [], alarm: saved.alarm };
+    preferences.value = toPrefs(saved);
     return true;
   }
 
@@ -173,6 +197,7 @@ export function useTimers() {
     resume,
     restart,
     dismiss,
+    rename,
     remove,
     savePreferences,
     pickAlarmFile,

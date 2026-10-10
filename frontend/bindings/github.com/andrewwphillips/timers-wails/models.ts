@@ -9,15 +9,14 @@ import * as settings$0 from "./internal/settings/models.js";
 import * as timer$0 from "./internal/timer/models.js";
 
 /**
- * ChangedEvent is the payload of EventChanged.
+ * ChangedEvent sent in EventChanged - the complete list of timers
  */
 export interface ChangedEvent {
     "timers": timer$0.Timer[] | null;
 }
 
 /**
- * ExpiredEvent is the payload of EventExpired. Several timers can come due in
- * the same tick — and a long machine sleep can bring a whole batch due at once
+ * ExpiredEvent sent in EventExpired - more than one timer can expire at the same time (esp. after machine was off/sleeping)
  * — so this is always a list.
  */
 export interface ExpiredEvent {
@@ -25,10 +24,23 @@ export interface ExpiredEvent {
 }
 
 /**
- * Preferences is the user-editable part of the settings. Timers are persisted
- * too but are not the user's to edit, so they are kept out of this type.
+ * Preferences is the user-editable part of the settings. Other persisted values
+ * such as the list of timers and saved window position (see Settings struct) are
+ * persisted too but are not directly editable by the user.
  */
 export interface Preferences {
     "presets": settings$0.Preset[] | null;
     "alarm": settings$0.Alarm;
+
+    /**
+     * Autostart is whether the app is registered to launch at login. It is not
+     * stored in the settings file: the OS registration is the source of truth.
+     */
+    "autostart": boolean;
+
+    /**
+     * AutostartAvailable is false where autostart is unsupported (e.g. the
+     * headless server build). Read-only: SavePreferences ignores it.
+     */
+    "autostartAvailable": boolean;
 }

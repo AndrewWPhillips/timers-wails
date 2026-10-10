@@ -21,8 +21,7 @@ import (
 	"time"
 )
 
-// MaxDuration caps a single timer. Long enough for any plausible use, short
-// enough that a typo cannot create a timer that outlives the machine.
+// MaxDuration - 100 hours seems like it should be big enough
 const MaxDuration = 100*time.Hour - time.Second
 
 // State is the lifecycle state of a timer.
@@ -212,6 +211,20 @@ func (m *Manager) Dismiss(id string) (Timer, error) {
 		return Timer{}, err
 	}
 	t.Alarming = false
+	return *t, nil
+}
+
+// Rename changes a timer's label. Nothing else about it changes, so a running
+// countdown carries on undisturbed.
+func (m *Manager) Rename(id, label string) (Timer, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	t, err := m.get(id)
+	if err != nil {
+		return Timer{}, err
+	}
+	t.Label = label
 	return *t, nil
 }
 

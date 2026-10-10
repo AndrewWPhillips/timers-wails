@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,7 +14,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// Event names emitted to the frontend.
+// Events sent to the frontend.
 const (
 	// EventExpired carries only the timers that expired on this tick, and is
 	// what starts the alarm.
@@ -26,23 +29,29 @@ const (
 // single pass over a small slice.
 const tickInterval = 200 * time.Millisecond
 
-// ExpiredEvent is the payload of EventExpired. Several timers can come due in
-// the same tick — and a long machine sleep can bring a whole batch due at once
+// ExpiredEvent sent in EventExpired - more than one timer can expire at the same time (esp. after machine was off/sleeping)
 // — so this is always a list.
 type ExpiredEvent struct {
 	Timers []timer.Timer `json:"timers"`
 }
 
-// ChangedEvent is the payload of EventChanged.
+// ChangedEvent sent in EventChanged - the complete list of timers
 type ChangedEvent struct {
 	Timers []timer.Timer `json:"timers"`
 }
 
-// Preferences is the user-editable part of the settings. Timers are persisted
-// too but are not the user's to edit, so they are kept out of this type.
+// Preferences is the user-editable part of the settings. Other persisted values
+// such as the list of timers and saved window position (see Settings struct) are
+// persisted too but are not directly editable by the user.
 type Preferences struct {
 	Presets []settings.Preset `json:"presets"`
 	Alarm   settings.Alarm    `json:"alarm"`
+	// Autostart is whether the app is registered to launch at login. It is not
+	// stored in the settings file: the OS registration is the source of truth.
+	Autostart bool `json:"autostart"`
+	// AutostartAvailable is false where autostart is unsupported (e.g. the
+	// headless server build). Read-only: SavePreferences ignores it.
+	AutostartAvailable bool `json:"autostartAvailable"`
 }
 
 func init() {
@@ -123,6 +132,7 @@ func (s *TimerService) ServiceStartup(_ context.Context, _ application.ServiceOp
 func (s *TimerService) ServiceShutdown() error {
 	close(s.stop)
 	<-s.done
+	// This also writes the window bounds recorded as the window closed.
 	s.persist()
 	return nil
 }
@@ -243,6 +253,17 @@ func (s *TimerService) DismissTimer(id string) (timer.Timer, error) {
 	return t, nil
 }
 
+// RenameTimer changes a timer's label. Surrounding whitespace is trimmed; an
+// empty label is allowed and the card shows it as "Untitled".
+func (s *TimerService) RenameTimer(id, label string) (timer.Timer, error) {
+	t, err := s.manager.Rename(id, strings.TrimSpace(label))
+	if err != nil {
+		return timer.Timer{}, err
+	}
+	s.persist()
+	return t, nil
+}
+
 // DeleteTimer removes a timer.
 func (s *TimerService) DeleteTimer(id string) error {
 	if err := s.manager.Delete(id); err != nil {
@@ -261,8 +282,29 @@ func (s *TimerService) ListTimers() []timer.Timer {
 // GetPreferences returns the presets and alarm settings.
 func (s *TimerService) GetPreferences() Preferences {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	return Preferences{Presets: s.cfg.Presets, Alarm: s.cfg.Alarm}
+	p := Preferences{Presets: s.cfg.Presets, Alarm: s.cfg.Alarm}
+	s.mu.Unlock()
+
+	p.Autostart, p.AutostartAvailable = autostartState()
+	return p
+}
+
+// autostartState reports whether the app is registered to launch at login,
+// and whether that is supported at all (it is not in the server build).
+func autostartState() (enabled, available bool) {
+	app := application.Get()
+	if app == nil {
+		return false, false
+	}
+	enabled, err := app.Autostart.IsEnabled()
+	switch {
+	case errors.Is(err, application.ErrAutostartNotSupported):
+		return false, false
+	case err != nil:
+		slog.Warn("could not read run-at-startup state", "error", err)
+		return false, true
+	}
+	return enabled, true
 }
 
 // PresetColors returns the fixed palette a new preset's colour is drawn
@@ -275,7 +317,8 @@ func (s *TimerService) PresetColors() []string {
 
 // SavePreferences stores new presets and alarm settings and returns them as
 // stored, which may differ from what was sent: out-of-range values are
-// repaired rather than rejected.
+// repaired rather than rejected. It also registers or unregisters the app to
+// run at login if p.Autostart differs from the current registration.
 func (s *TimerService) SavePreferences(p Preferences) (Preferences, error) {
 	s.mu.Lock()
 	s.cfg.Presets = p.Presets
@@ -287,9 +330,34 @@ func (s *TimerService) SavePreferences(p Preferences) (Preferences, error) {
 
 	cfg.Timers = s.manager.Snapshot()
 	if err := s.store.Save(cfg); err != nil {
+		saved.Autostart, saved.AutostartAvailable = autostartState()
 		return saved, err
 	}
-	return saved, nil
+
+	err := applyAutostart(p.Autostart)
+	// Report what the OS actually has now, whether or not the change worked.
+	saved.Autostart, saved.AutostartAvailable = autostartState()
+	return saved, err
+}
+
+// applyAutostart registers or unregisters the app to launch at login, if that
+// is supported and differs from the current registration.
+func applyAutostart(want bool) error {
+	enabled, available := autostartState()
+	if !available || want == enabled {
+		return nil
+	}
+	app := application.Get()
+	var err error
+	if want {
+		err = app.Autostart.Enable()
+	} else {
+		err = app.Autostart.Disable()
+	}
+	if err != nil {
+		return fmt.Errorf("could not change run-at-startup: %w", err)
+	}
+	return nil
 }
 
 // PickAlarmFile opens a native file picker and returns the chosen path, or an

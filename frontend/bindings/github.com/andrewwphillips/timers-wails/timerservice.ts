@@ -85,6 +85,14 @@ export function PresetColors(): $CancellablePromise<string[] | null> {
 }
 
 /**
+ * RenameTimer changes a timer's label. Surrounding whitespace is trimmed; an
+ * empty label is allowed and the card shows it as "Untitled".
+ */
+export function RenameTimer(id: string, label: string): $CancellablePromise<timer$0.Timer> {
+    return $Call.ByID(79433403, id, label);
+}
+
+/**
  * RestartTimer runs a timer again from its full duration.
  */
 export function RestartTimer(id: string): $CancellablePromise<timer$0.Timer> {
@@ -101,7 +109,8 @@ export function ResumeTimer(id: string): $CancellablePromise<timer$0.Timer> {
 /**
  * SavePreferences stores new presets and alarm settings and returns them as
  * stored, which may differ from what was sent: out-of-range values are
- * repaired rather than rejected.
+ * repaired rather than rejected. It also registers or unregisters the app to
+ * run at login if p.Autostart differs from the current registration.
  */
 export function SavePreferences(p: $models.Preferences): $CancellablePromise<$models.Preferences> {
     return $Call.ByID(2051932637, p);

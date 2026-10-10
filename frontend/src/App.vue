@@ -24,6 +24,7 @@ const {
   resume,
   restart,
   dismiss,
+  rename,
   remove,
   savePreferences,
   pickAlarmFile,
@@ -177,13 +178,16 @@ onUnmounted(() => {
         @resume="resume"
         @restart="restart"
         @dismiss="dismiss"
+        @rename="rename"
         @remove="remove"
       />
 
       <p v-if="!loading && timers.length === 0" class="empty">
-        Click and drag the time controls, or<br/>
-        choose a preset from the buttons above.
+        No timers are running.<br/>
+        Choose a preset from the buttons above, OR<br/>
+        click and drag the time controls and select Start.
       </p>
+
     </section>
 
     <SettingsDialog

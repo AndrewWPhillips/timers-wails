@@ -101,6 +101,8 @@ const rampSeconds = ref(60);
  *  matches equal values; both are rounded to 2dp, so the compare is exact.) */
 const noRise = computed(() => startVolume.value >= endVolume.value);
 const muted = ref(false);
+/** Run at login. Like every other field, only applied (by Go) on Save. */
+const autostart = ref(false);
 const soundFile = ref("");
 
 /** Slider granularity, and the lowest end volume (matches settings.VolumeStep
@@ -170,6 +172,7 @@ watch(
     endVolume.value = prefs.alarm.endVolume;
     rampSeconds.value = prefs.alarm.rampSeconds;
     muted.value = prefs.alarm.muted;
+    autostart.value = prefs.autostart;
     soundFile.value = prefs.alarm.soundFile;
   },
   { immediate: true, deep: true },
@@ -217,7 +220,12 @@ function save(): void {
     }))
     .filter((preset) => preset.seconds > 0);
 
-  emit("save", { presets, alarm: alarmValues() });
+  emit("save", {
+    presets,
+    alarm: alarmValues(),
+    autostart: autostart.value,
+    autostartAvailable: props.preferences.autostartAvailable,
+  });
 }
 
 function clearSound(): void {
@@ -234,6 +242,14 @@ function clearSound(): void {
       </header>
 
       <div class="body">
+        <label
+          class="check startup"
+          :title="preferences.autostartAvailable ? '' : 'Not available in this build'"
+        >
+          <input v-model="autostart" type="checkbox" :disabled="!preferences.autostartAvailable" />
+          <span>Run Timers at startup</span>
+        </label>
+
         <div class="row row-header">
           <h3>Presets</h3>
           <span></span>
@@ -281,7 +297,7 @@ function clearSound(): void {
         </ul>
         <button class="add" @click="addRow">+ Add preset</button>
         <p v-if="rows.length === 0" class="note">
-          No saved presets found - using the default presets.
+          No presets - selecting Save will use the defaults.
         </p>
 
         <!-- Silent sits beside the heading, above everything it disables, so
@@ -722,6 +738,15 @@ input:focus {
 
 .check input {
   padding: 0;
+}
+
+/* First thing in the dialog body, above the Presets heading. */
+.startup {
+  margin-top: 12px;
+}
+
+.startup:has(input:disabled) {
+  opacity: 0.5;
 }
 
 .summary {
