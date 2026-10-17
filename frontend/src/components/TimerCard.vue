@@ -43,12 +43,15 @@ const remainingMs = computed(() => {
 });
 
 const display = computed(() => formatRemaining(remainingMs.value));
+/** The timer's full length, shown after the remaining time ("3:00 / 5:00"). */
+const totalDisplay = computed(() => formatRemaining(props.timer.totalMs));
 const done = computed(() => progress(remainingMs.value, props.timer.totalMs));
 
 /** The preset colour this timer was started with, if any -- exposed as CSS
  *  custom properties so the progress bar and the Pause/Resume/Dismiss buttons
  *  can all read it, along with a dark or white text colour that stays
  *  readable on it (the palette mixes light and deep colours). With no colour
+ *  (a timer started without a preset, or one created before this field
  *  existed) the CSS falls back to the default accent with white text. */
 const colorStyle = computed(() => {
   const fg = textColorOn(props.timer.color);
@@ -132,7 +135,11 @@ function cancel(): void {
     </div>
 
     <footer class="actions">
-      <p class="time" :class="{ wide: display.length > 5 }">{{ display }}</p>
+      <!-- The total is never shorter than the remaining time, so its length
+           decides whether hours are showing and the text needs shrinking. -->
+      <p class="time" :class="{ wide: totalDisplay.length > 5 }">
+        {{ display }}<span class="total"> / {{ totalDisplay }}</span>
+      </p>
 
       <span class="buttons">
         <button @click="emit('restart', timer.id)">Restart</button>
@@ -275,10 +282,20 @@ function cancel(): void {
   font-weight: 600;
   line-height: 1;
   color: var(--text);
+  /* Keeps "remaining / total" on one line beside the buttons. */
+  white-space: nowrap;
 }
 
 .time.wide {
   font-size: 1.25rem;
+}
+
+/* The total after the remaining time: dimmer and a little smaller, so the
+   live countdown stays the thing that stands out. */
+.total {
+  color: var(--muted);
+  font-size: 0.7em;
+  font-weight: 500;
 }
 
 .is-expired .time {

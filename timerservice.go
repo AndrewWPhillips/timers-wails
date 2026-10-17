@@ -353,7 +353,6 @@ func (s *TimerService) SavePreferences(p Preferences) (Preferences, error) {
 	s.mu.Unlock()
 
 	cfg.Timers = s.manager.Snapshot()
-	cfg.Timers = s.timersToSave()
 	if err := s.store.Save(cfg); err != nil {
 		saved.Autostart, saved.AutostartAvailable = autostartState()
 		return saved, err

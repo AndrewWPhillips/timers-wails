@@ -28,6 +28,7 @@ const {
   remove,
   savePreferences,
   pickAlarmFile,
+  openSettingsFolder,
 } = useTimers();
 
 const showSettings = ref(false);
@@ -74,6 +75,25 @@ watch(justExpired, async (ids) => {
 async function startPreset(seconds: number, label: string, color: string): Promise<void> {
   await create(0, 0, seconds, label, color);
 }
+
+/** A timer from the time controls starts unnamed ("Untitled"); it can be
+ *  renamed on its card. */
+async function startManual(hours: number, minutes: number, seconds: number): Promise<void> {
+  await create(hours, minutes, seconds, "");
+}
+
+/** The list builds upwards from the time controls, so when a timer is added
+ *  (or the saved ones load) scroll to the bottom, where the newest one is. */
+watch(
+  () => timers.value.length,
+  async (count, previous) => {
+    if (count <= previous) {
+      return;
+    }
+    await nextTick();
+    cards.value?.scrollTo({ top: cards.value.scrollHeight });
+  },
+);
 
 async function onSave(next: typeof preferences.value): Promise<void> {
   if (await savePreferences(next)) {

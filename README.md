@@ -31,6 +31,7 @@ There are other features that Claude added or made it easy to add:
 * built-in alarm sound can be overridden using a sound file
 * click and drag with the mouse to quickly set hour/min/sec values 
 * you can assign a different progress bar colour for each preset
+* etc
 
 ## Development
 
