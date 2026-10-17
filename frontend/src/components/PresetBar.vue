@@ -52,6 +52,7 @@ const emit = defineEmits<{
   cursor: pointer;
 }
 
+/* brightness() works for any preset colour, unlike a fixed hover colour. */
 .preset:hover {
   filter: brightness(1.15);
 }

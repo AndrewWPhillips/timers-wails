@@ -22,9 +22,9 @@ func main() {
 		log.Fatalf("timers settings error: %v", err)
 	}
 
-	// Keep WebView2's data (cache, cookies...) alongside timers.json rather than
-	// in its default %APPDATA%\timers.exe, so the app has a single folder.
-	// WebView2 adds its own EBWebView subfolder here. Ignored off Windows.
+	// Keep WebView2's data (cache, cookies...) alongside timers.json rather than in
+	// %APPDATA%\timers.exe (see WebviewUserDataPath), so the app has a single folder.
+	// WebView2 adds its own EBWebView subfolder here (only on Windows).
 	dataDir := filepath.Dir(path)
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		log.Fatalf("timers settings error: %v", err)

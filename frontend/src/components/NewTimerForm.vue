@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
 import { TimerService } from "../../bindings/github.com/andrewwphillips/timers-wails";
 import { vDragNumber } from "../directives/dragNumber";
 import { formatDuration, toSeconds } from "../lib/format";
 
+// No name is asked for here: a new timer starts as "Untitled" and can be
+// renamed at any time by clicking its name on the card.
 const emit = defineEmits<{
-  start: [hours: number, minutes: number, seconds: number, label: string];
+  start: [hours: number, minutes: number, seconds: number];
 }>();
 
 // Start at zero; the values last used are restored from the settings file on
@@ -80,19 +82,12 @@ function submit(): void {
   if (!valid.value) {
     return;
   }
-  emit("start", value(hours.value), value(minutes.value), value(seconds.value), label.value.trim());
-  label.value = "";
+  emit("start", value(hours.value), value(minutes.value), value(seconds.value));
 }
 </script>
 
 <template>
   <form class="form" @submit.prevent="submit">
-    <div class="row">
-      <label class="field grow">
-        <input v-model="label" type="text" maxlength="60" placeholder="Describe what you want to time (optional)." />
-      </label>
-    </div>
-
     <div class="row">
       <div class="fields">
         <label class="field time">
@@ -146,10 +141,6 @@ function submit(): void {
 .field.time {
   flex: none;
   width: 60px;
-}
-
-.grow {
-  flex: 1;
 }
 
 .field span {

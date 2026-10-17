@@ -67,8 +67,7 @@ type Timer struct {
 	// Color is copied from the preset that created this timer, at creation
 	// time -- it is not looked up live, so editing or deleting the preset
 	// later cannot change the colour of a timer already running. Empty for a
-	// timer created without a preset (or one created before this field
-	// existed); the frontend falls back to its default colour in that case.
+	// timer created without a preset whence the frontend uses its default colour.
 	Color string `json:"color"`
 }
 
