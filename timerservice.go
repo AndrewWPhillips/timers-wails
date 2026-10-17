@@ -289,6 +289,13 @@ func (s *TimerService) GetPreferences() Preferences {
 	return p
 }
 
+// OpenSettingsFolder opens the folder holding the settings file in the
+// system's file manager, with the file selected where the platform supports
+// it. Not available in the headless server build (see settingsfolder*.go).
+func (s *TimerService) OpenSettingsFolder() error {
+	return revealInFileManager(s.store.Path())
+}
+
 // GetTimerControls returns the hours, minutes and seconds last set in the main
 // window's time controls, so they can be restored when the app opens.
 func (s *TimerService) GetTimerControls() settings.TimerControls {
@@ -346,6 +353,7 @@ func (s *TimerService) SavePreferences(p Preferences) (Preferences, error) {
 	s.mu.Unlock()
 
 	cfg.Timers = s.manager.Snapshot()
+	cfg.Timers = s.timersToSave()
 	if err := s.store.Save(cfg); err != nil {
 		saved.Autostart, saved.AutostartAvailable = autostartState()
 		return saved, err

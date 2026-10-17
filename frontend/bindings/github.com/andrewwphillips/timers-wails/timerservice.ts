@@ -71,6 +71,15 @@ export function ListTimers(): $CancellablePromise<timer$0.Timer[] | null> {
 }
 
 /**
+ * OpenSettingsFolder opens the folder holding the settings file in the
+ * system's file manager, with the file selected where the platform supports
+ * it. Not available in the headless server build (see settingsfolder*.go).
+ */
+export function OpenSettingsFolder(): $CancellablePromise<void> {
+    return $Call.ByID(2086540277);
+}
+
+/**
  * PauseTimer freezes a running timer.
  */
 export function PauseTimer(id: string): $CancellablePromise<timer$0.Timer> {

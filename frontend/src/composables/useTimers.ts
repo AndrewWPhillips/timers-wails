@@ -162,6 +162,11 @@ export function useTimers() {
     return true;
   }
 
+  /** Opens the folder holding the settings file in the system file manager. */
+  async function openSettingsFolder(): Promise<void> {
+    await attempt(() => TimerService.OpenSettingsFolder());
+  }
+
   async function pickAlarmFile(): Promise<string | undefined> {
     return attempt(() => TimerService.PickAlarmFile());
   }
@@ -201,5 +206,6 @@ export function useTimers() {
     remove,
     savePreferences,
     pickAlarmFile,
+    openSettingsFolder,
   };
 }

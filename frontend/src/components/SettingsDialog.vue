@@ -16,6 +16,8 @@ const props = defineProps<{
    *  undefined if the user cancelled it or it failed. Owned by the parent
    *  since it is a thin wrapper over the bound Go call. */
   pickAlarmFile: () => Promise<string | undefined>;
+  /** Opens the settings file's folder in the system file manager. */
+  openSettingsFolder: () => Promise<void>;
   /** True while a Test preview is playing, so the Test button offers Stop. */
   testing: boolean;
 }>();
@@ -237,7 +239,16 @@ function clearSound(): void {
   <div class="backdrop" @click.self="requestClose">
     <section class="dialog" role="dialog" aria-modal="true" aria-label="Settings">
       <header class="head">
-        <h2>Settings</h2>
+        <!-- Clicking the title opens the folder holding the settings file. -->
+        <h2>
+          <button
+            class="title-btn"
+            title="Open the settings folder"
+            @click="openSettingsFolder()"
+          >
+            Settings
+          </button>
+        </h2>
         <button class="icon" aria-label="Close" :disabled="pickingSound" @click="requestClose">&times;</button>
       </header>
 
@@ -434,6 +445,25 @@ function clearSound(): void {
 .head h2 {
   margin: 0;
   font-size: 1rem;
+}
+
+/* The title, as a plain-looking button: clicking it opens the settings
+   folder. Overrides the dialog's general button styling. */
+.title-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.title-btn:hover,
+.title-btn:focus-visible {
+  border: none;
+  outline: none;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
 }
 
 .body {
