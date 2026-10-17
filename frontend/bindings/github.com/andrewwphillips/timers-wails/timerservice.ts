@@ -14,6 +14,9 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as settings$0 from "./internal/settings/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as timer$0 from "./internal/timer/models.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -49,6 +52,14 @@ export function DismissTimer(id: string): $CancellablePromise<timer$0.Timer> {
  */
 export function GetPreferences(): $CancellablePromise<$models.Preferences> {
     return $Call.ByID(3982987350);
+}
+
+/**
+ * GetTimerControls returns the hours, minutes and seconds last set in the main
+ * window's time controls, so they can be restored when the app opens.
+ */
+export function GetTimerControls(): $CancellablePromise<settings$0.TimerControls> {
+    return $Call.ByID(2707578711);
 }
 
 /**
@@ -114,4 +125,12 @@ export function ResumeTimer(id: string): $CancellablePromise<timer$0.Timer> {
  */
 export function SavePreferences(p: $models.Preferences): $CancellablePromise<$models.Preferences> {
     return $Call.ByID(2051932637, p);
+}
+
+/**
+ * SaveTimerControls remembers the time controls' current values. The
+ * frontend calls it (debounced) whenever they change.
+ */
+export function SaveTimerControls(c: settings$0.TimerControls): $CancellablePromise<void> {
+    return $Call.ByID(2029168972, c);
 }

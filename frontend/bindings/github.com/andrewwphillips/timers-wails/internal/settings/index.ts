@@ -3,5 +3,6 @@
 
 export type {
     Alarm,
-    Preset
+    Preset,
+    TimerControls
 } from "./models.js";

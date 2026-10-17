@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 
+import { TimerService } from "../../bindings/github.com/andrewwphillips/timers-wails";
 import { vDragNumber } from "../directives/dragNumber";
 import { formatDuration, toSeconds } from "../lib/format";
 
@@ -8,16 +9,69 @@ const emit = defineEmits<{
   start: [hours: number, minutes: number, seconds: number, label: string];
 }>();
 
+// Start at zero; the values last used are restored from the settings file on
+// mount (see below).
 const hours = ref(0);
-const minutes = ref(5);
+const minutes = ref(0);
 const seconds = ref(0);
-const label = ref("");
 
 /** Empty inputs read as 0 rather than NaN, so a cleared field is not an error. */
 function value(input: number | string): number {
   const n = typeof input === "number" ? input : Number(input);
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
 }
+
+/**
+ * The controls are remembered across restarts, as the three values entered
+ * rather than a total, so 80 minutes comes back as 80 minutes. Changes are
+ * saved after a short pause, since dragging a value fires an input event for
+ * every step.
+ */
+const saveDelayMs = 400;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+/** Not until the saved values have been restored, so the restore itself (or
+ *  an early edit racing it) never overwrites them with the zero defaults. */
+let restored = false;
+
+onMounted(async () => {
+  try {
+    const saved = await TimerService.GetTimerControls();
+    hours.value = saved.hours;
+    minutes.value = saved.minutes;
+    seconds.value = saved.seconds;
+  } catch {
+    // Not fatal: the controls just start at zero.
+  }
+  restored = true;
+});
+
+watch([hours, minutes, seconds], () => {
+  if (!restored) {
+    return;
+  }
+  if (saveTimer !== null) {
+    clearTimeout(saveTimer);
+  }
+  saveTimer = setTimeout(saveControls, saveDelayMs);
+});
+
+function saveControls(): void {
+  saveTimer = null;
+  void TimerService.SaveTimerControls({
+    hours: value(hours.value),
+    minutes: value(minutes.value),
+    seconds: value(seconds.value),
+  }).catch(() => {
+    // Losing the remembered controls is harmless; nothing to tell the user.
+  });
+}
+
+onUnmounted(() => {
+  if (saveTimer !== null) {
+    clearTimeout(saveTimer);
+    saveControls();
+  }
+});
 
 const totalSeconds = computed(() => toSeconds(value(hours.value), value(minutes.value), value(seconds.value)));
 const valid = computed(() => totalSeconds.value > 0);

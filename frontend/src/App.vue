@@ -160,13 +160,10 @@ onUnmounted(() => {
       <span v-if="timers.length" class="count">{{ timers.length }} running</span>
     </header>
 
-    <section class="panel">
-      <PresetBar :presets="preferences.presets" @start="startPreset" @edit="showSettings = true" />
-      <NewTimerForm @start="create" />
-    </section>
-
     <p v-if="error" class="error" role="alert">{{ error }}</p>
 
+    <!-- Fills the space above the time controls, builds up from the bottom,
+         and scrolls once there are more timers than fit. -->
     <section ref="cards" class="cards">
       <TimerCard
         v-for="timer in timers"
@@ -184,10 +181,19 @@ onUnmounted(() => {
 
       <p v-if="!loading && timers.length === 0" class="empty">
         No timers are running.<br/>
-        Choose a preset from the buttons above, OR<br/>
+        Choose a preset using the buttons, OR<br/>
         click and drag the time controls and select Start.
       </p>
+    </section>
 
+    <section class="panel">
+      <NewTimerForm @start="startManual" />
+    </section>
+
+    <!-- Below the time controls, which leaves room under them for dragging
+         a value down. -->
+    <section class="panel">
+      <PresetBar :presets="preferences.presets" @start="startPreset" @edit="showSettings = true" />
     </section>
 
     <SettingsDialog
@@ -195,6 +201,7 @@ onUnmounted(() => {
       :preferences="preferences"
       :preset-colors="presetColors"
       :pick-alarm-file="pickAlarmFile"
+      :open-settings-folder="openSettingsFolder"
       :testing="testing"
       @save="onSave"
       @close="closeSettings"
@@ -212,7 +219,9 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  min-height: 100vh;
+  /* Exactly the window's height (padding included), so the timer list in the
+     middle takes up whatever is left and scrolls, rather than the page. */
+  height: 100vh;
 }
 
 .top {
@@ -245,9 +254,21 @@ h1 {
 }
 
 .cards {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-bright) transparent;
+}
+
+/* Anchors the list to the bottom, next to the time controls. An auto top
+   margin rather than justify-content: flex-end, which would push overflowing
+   timers out of reach above the top of the scroll area. */
+.cards > :first-child {
+  margin-top: auto;
 }
 
 .empty {

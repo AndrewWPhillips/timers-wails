@@ -289,6 +289,23 @@ func (s *TimerService) GetPreferences() Preferences {
 	return p
 }
 
+// GetTimerControls returns the hours, minutes and seconds last set in the main
+// window's time controls, so they can be restored when the app opens.
+func (s *TimerService) GetTimerControls() settings.TimerControls {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cfg.Controls
+}
+
+// SaveTimerControls remembers the time controls' current values. The
+// frontend calls it (debounced) whenever they change.
+func (s *TimerService) SaveTimerControls(c settings.TimerControls) {
+	s.mu.Lock()
+	s.cfg.Controls = c
+	s.mu.Unlock()
+	s.persist()
+}
+
 // autostartState reports whether the app is registered to launch at login,
 // and whether that is supported at all (it is not in the server build).
 func autostartState() (enabled, available bool) {

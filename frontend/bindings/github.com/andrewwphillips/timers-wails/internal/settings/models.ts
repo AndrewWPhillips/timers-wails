@@ -42,3 +42,15 @@ export interface Preset {
      */
     "color": string;
 }
+
+/**
+ * TimerControls is the last hours/minutes/seconds entered in the main window's
+ * time controls, restored when the app opens. Kept as the three fields as
+ * entered rather than a total, so 80 minutes comes back as 80 minutes, not
+ * 1 hour 20. The zero value (all zero) is what a new install starts with.
+ */
+export interface TimerControls {
+    "hours": number;
+    "minutes": number;
+    "seconds": number;
+}

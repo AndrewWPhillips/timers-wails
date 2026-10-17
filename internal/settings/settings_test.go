@@ -73,6 +73,8 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 			},
 		},
 		Window: &WindowBounds{X: -1200, Y: 40, Width: 520, Height: 800, Maximised: true},
+		// 80 minutes must come back as 80 minutes, not 1 hour 20.
+		Controls: TimerControls{Hours: 0, Minutes: 80, Seconds: 5},
 	}
 
 	if err := s.Save(want); err != nil {
@@ -95,6 +97,24 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	}
 	if got.Window == nil || *got.Window != *want.Window {
 		t.Errorf("Window = %+v, want %+v", got.Window, want.Window)
+	}
+	if got.Controls != want.Controls {
+		t.Errorf("Controls = %+v, want %+v", got.Controls, want.Controls)
+	}
+}
+
+func TestTimerControlsDefaultToZero(t *testing.T) {
+	if got := Default().Controls; got != (TimerControls{}) {
+		t.Errorf("Default().Controls = %+v, want all zero", got)
+	}
+}
+
+func TestNormaliseRepairsTimerControls(t *testing.T) {
+	s := Settings{Presets: DefaultPresets(), Controls: TimerControls{Hours: 500, Minutes: -3, Seconds: -1}}
+	s.Normalise()
+	want := TimerControls{Hours: MaxControlHours, Minutes: 0, Seconds: 0}
+	if s.Controls != want {
+		t.Errorf("Controls = %+v, want %+v", s.Controls, want)
 	}
 }
 

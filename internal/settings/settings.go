@@ -97,6 +97,7 @@ const VolumeStep = 0.05
 // MaxRampSeconds caps how long the alarm takes to reach full volume.
 const MaxRampSeconds = 600
 
+// Defaults for a new install, and for any value missing from the file.
 const (
 	DefaultVolume      = 0.8
 	DefaultRampSeconds = 60
@@ -130,7 +131,22 @@ type Settings struct {
 	// set the main window location when the app is reopened but may be adjusted later (only
 	// for OS=Windows) if the config file settings now have a location outside any screen,
 	Window *WindowBounds `json:"window,omitempty"`
+	// Controls is what was last set in the main window's time controls.
+	Controls TimerControls `json:"controls"`
 }
+
+// TimerControls is the last hours/minutes/seconds entered in the main window's
+// time controls, restored when the app opens. Kept as the three fields as
+// entered rather than a total, so 80 minutes comes back as 80 minutes, not
+// 1 hour 20. The zero value (all zero) is what a new install starts with.
+type TimerControls struct {
+	Hours   int `json:"hours"`
+	Minutes int `json:"minutes"`
+	Seconds int `json:"seconds"`
+}
+
+// MaxControlHours matches the hour control's own limit.
+const MaxControlHours = 99
 
 // DefaultPresets are the quick-set buttons a new install starts with.
 func DefaultPresets() []Preset {
@@ -203,6 +219,10 @@ func (s *Settings) Normalise() {
 	if s.Window != nil && (s.Window.Width <= 0 || s.Window.Height <= 0) {
 		s.Window = nil
 	}
+
+	s.Controls.Hours = min(max(s.Controls.Hours, 0), MaxControlHours)
+	s.Controls.Minutes = max(s.Controls.Minutes, 0)
+	s.Controls.Seconds = max(s.Controls.Seconds, 0)
 
 	if s.Timers == nil {
 		s.Timers = []timer.Timer{}
