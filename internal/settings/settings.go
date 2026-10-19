@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/andrewwphillips/timers-wails/internal/timer"
 )
@@ -133,6 +134,20 @@ type Settings struct {
 	Window *WindowBounds `json:"window,omitempty"`
 	// Controls is what was last set in the main window's time controls.
 	Controls TimerControls `json:"controls"`
+	// Sync is local to this device: it says where the shared timer logs live.
+	Sync Sync `json:"sync"`
+}
+
+// Sync configures sharing running timers with other devices through a folder
+// that another tool (Syncthing, Dropbox, ...) keeps in step. An empty Folder
+// turns it off. Everything else in Settings stays on this device.
+type Sync struct {
+	Folder string `json:"folder"`
+	// DeviceID names this device's log file. It is generated the first time sync
+	// is turned on and never edited by the user.
+	DeviceID string `json:"deviceId"`
+	// DeviceName is shown in place of the id, and is part of the log file name.
+	DeviceName string `json:"deviceName"`
 }
 
 // TimerControls is the last hours/minutes/seconds entered in the main window's
@@ -223,6 +238,9 @@ func (s *Settings) Normalise() {
 	s.Controls.Hours = min(max(s.Controls.Hours, 0), MaxControlHours)
 	s.Controls.Minutes = max(s.Controls.Minutes, 0)
 	s.Controls.Seconds = max(s.Controls.Seconds, 0)
+
+	s.Sync.Folder = strings.TrimSpace(s.Sync.Folder)
+	s.Sync.DeviceName = strings.TrimSpace(s.Sync.DeviceName)
 
 	if s.Timers == nil {
 		s.Timers = []timer.Timer{}

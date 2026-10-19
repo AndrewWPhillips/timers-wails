@@ -313,6 +313,40 @@ func (m *Manager) Snapshot() []Timer {
 	return m.List()
 }
 
+// Replace swaps in a complete set of timers whose state is already settled
+// (Alarming included), as when they are rebuilt from the synced log. It returns
+// those that are alarming now but were not before, so the caller can start the
+// alarm for them; a timer that stops alarming simply needs no event.
+func (m *Manager) Replace(timers []Timer) []Timer {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	was := make(map[string]bool, len(m.timers))
+	for id, t := range m.timers {
+		was[id] = t.Alarming
+	}
+
+	m.timers = make(map[string]*Timer, len(timers))
+	m.order = m.order[:0]
+
+	var started []Timer
+	for i := range timers {
+		t := timers[i]
+		if t.ID == "" {
+			continue
+		}
+		if _, clash := m.timers[t.ID]; clash {
+			continue
+		}
+		m.timers[t.ID] = &t
+		m.order = append(m.order, t.ID)
+		if t.Alarming && !was[t.ID] {
+			started = append(started, t)
+		}
+	}
+	return started
+}
+
 // Restore replaces the contents of the Manager with a persisted snapshot and
 // immediately expires anything whose deadline passed while the app was closed.
 // It returns the timers that expired during the restore.

@@ -7,10 +7,12 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/andrewwphillips/timers-wails/internal/settings"
 	"github.com/andrewwphillips/timers-wails/internal/timer"
+	"github.com/andrewwphillips/timers-wails/internal/timersync"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -49,6 +51,9 @@ type Preferences struct {
 	// Autostart is whether the app is registered to launch at login. It is not
 	// stored in the settings file: the OS registration is the source of truth.
 	Autostart bool `json:"autostart"`
+	// Sync is where, and as whom, running timers are shared with other devices.
+	// DeviceID is filled in by Go and ignored if the frontend sends one.
+	Sync settings.Sync `json:"sync"`
 	// AutostartAvailable is false where autostart is unsupported (e.g. the
 	// headless server build). Read-only: SavePreferences ignores it.
 	AutostartAvailable bool `json:"autostartAvailable"`
@@ -80,6 +85,15 @@ type TimerService struct {
 
 	// flashing is touched only by the run goroutine.
 	flashing bool
+
+	// Sharing timers through a folder (see syncservice.go). syncMu is taken
+	// before mu, and held across a change to the manager and the log entry
+	// recording it. syncLog and syncCancel are guarded by it; syncOn mirrors
+	// whether syncLog is set, for persist, which must not take syncMu.
+	syncMu     sync.Mutex
+	syncLog    *timersync.Log
+	syncCancel context.CancelFunc
+	syncOn     atomic.Bool
 }
 
 // NewTimerService returns a service backed by store.
@@ -123,6 +137,12 @@ func (s *TimerService) ServiceStartup(_ context.Context, _ application.ServiceOp
 		slog.Info("timers expired while the app was closed", "count", len(fired))
 	}
 
+	s.syncMu.Lock()
+	if err := s.startSync(); err != nil {
+		slog.Warn("timer sharing is off", "folder", cfg.Sync.Folder, "error", err)
+	}
+	s.syncMu.Unlock()
+
 	go s.run()
 	return nil
 }
@@ -132,6 +152,9 @@ func (s *TimerService) ServiceStartup(_ context.Context, _ application.ServiceOp
 func (s *TimerService) ServiceShutdown() error {
 	close(s.stop)
 	<-s.done
+	s.syncMu.Lock()
+	s.stopSync()
+	s.syncMu.Unlock()
 	// This also writes the window bounds recorded as the window closed.
 	s.persist()
 	return nil
@@ -190,10 +213,20 @@ func (s *TimerService) persist() {
 	cfg := s.cfg
 	s.mu.Unlock()
 
-	cfg.Timers = s.manager.Snapshot()
+	cfg.Timers = s.timersToSave()
 	if err := s.store.Save(cfg); err != nil {
 		slog.Error("could not save settings", "path", s.store.Path(), "error", err)
 	}
+}
+
+// timersToSave is the timers to store in the settings file: none while they are
+// shared, since the sync folder then holds them and a stale copy here would
+// come back if sharing were later turned on from another folder.
+func (s *TimerService) timersToSave() []timer.Timer {
+	if s.syncOn.Load() {
+		return nil
+	}
+	return s.manager.Snapshot()
 }
 
 // CreateTimer starts a new timer for the given duration. Minutes and seconds
@@ -205,71 +238,89 @@ func (s *TimerService) CreateTimer(hours, minutes, seconds int, label, color str
 		time.Duration(minutes)*time.Minute +
 		time.Duration(seconds)*time.Second
 
+	s.syncMu.Lock()
+	defer s.syncMu.Unlock()
+
 	t, err := s.manager.Create(d, label, color, time.Now())
-	if err != nil {
-		return timer.Timer{}, err
+	if err == nil {
+		s.persist()
 	}
-	s.persist()
-	return t, nil
+	return s.syncResult(t, err, timersync.Entry{
+		Op: timersync.OpNew, Label: t.Label, Color: t.Color, TotalMS: t.TotalMS, EndsAt: t.EndsAtMS,
+	})
 }
 
 // PauseTimer freezes a running timer.
 func (s *TimerService) PauseTimer(id string) (timer.Timer, error) {
+	s.syncMu.Lock()
+	defer s.syncMu.Unlock()
+
 	t, err := s.manager.Pause(id, time.Now())
-	if err != nil {
-		return timer.Timer{}, err
+	if err == nil {
+		s.persist()
 	}
-	s.persist()
-	return t, nil
+	return s.syncResult(t, err, timersync.Entry{Op: timersync.OpPause, RemainingMS: t.RemainingMS})
 }
 
 // ResumeTimer restarts a paused timer from where it left off.
 func (s *TimerService) ResumeTimer(id string) (timer.Timer, error) {
+	s.syncMu.Lock()
+	defer s.syncMu.Unlock()
+
 	t, err := s.manager.Resume(id, time.Now())
-	if err != nil {
-		return timer.Timer{}, err
+	if err == nil {
+		s.persist()
 	}
-	s.persist()
-	return t, nil
+	return s.syncResult(t, err, timersync.Entry{Op: timersync.OpResume, EndsAt: t.EndsAtMS})
 }
 
 // RestartTimer runs a timer again from its full duration.
 func (s *TimerService) RestartTimer(id string) (timer.Timer, error) {
+	s.syncMu.Lock()
+	defer s.syncMu.Unlock()
+
 	t, err := s.manager.Restart(id, time.Now())
-	if err != nil {
-		return timer.Timer{}, err
+	if err == nil {
+		s.persist()
 	}
-	s.persist()
-	return t, nil
+	return s.syncResult(t, err, timersync.Entry{Op: timersync.OpRestart, EndsAt: t.EndsAtMS})
 }
 
 // DismissTimer silences an expired timer but keeps it in the list.
 func (s *TimerService) DismissTimer(id string) (timer.Timer, error) {
+	s.syncMu.Lock()
+	defer s.syncMu.Unlock()
+
 	t, err := s.manager.Dismiss(id)
-	if err != nil {
-		return timer.Timer{}, err
+	if err == nil {
+		s.persist()
 	}
-	s.persist()
-	return t, nil
+	return s.syncResult(t, err, timersync.Entry{Op: timersync.OpDismiss, EndsAt: t.EndsAtMS})
 }
 
 // RenameTimer changes a timer's label. Surrounding whitespace is trimmed; an
 // empty label is allowed and the card shows it as "Untitled".
 func (s *TimerService) RenameTimer(id, label string) (timer.Timer, error) {
+	s.syncMu.Lock()
+	defer s.syncMu.Unlock()
+
 	t, err := s.manager.Rename(id, strings.TrimSpace(label))
-	if err != nil {
-		return timer.Timer{}, err
+	if err == nil {
+		s.persist()
 	}
-	s.persist()
-	return t, nil
+	return s.syncResult(t, err, timersync.Entry{Op: timersync.OpRename, Label: t.Label})
 }
 
 // DeleteTimer removes a timer.
 func (s *TimerService) DeleteTimer(id string) error {
+	s.syncMu.Lock()
+	defer s.syncMu.Unlock()
+
 	if err := s.manager.Delete(id); err != nil {
 		return err
 	}
 	s.persist()
+	s.record(timersync.Entry{Op: timersync.OpDelete, ID: id})
 	return nil
 }
 
@@ -282,7 +333,7 @@ func (s *TimerService) ListTimers() []timer.Timer {
 // GetPreferences returns the presets and alarm settings.
 func (s *TimerService) GetPreferences() Preferences {
 	s.mu.Lock()
-	p := Preferences{Presets: s.cfg.Presets, Alarm: s.cfg.Alarm}
+	p := Preferences{Presets: s.cfg.Presets, Alarm: s.cfg.Alarm, Sync: s.cfg.Sync}
 	s.mu.Unlock()
 
 	p.Autostart, p.AutostartAvailable = autostartState()
@@ -345,20 +396,38 @@ func (s *TimerService) PresetColors() []string {
 // run at login if p.Autostart differs from the current registration.
 func (s *TimerService) SavePreferences(p Preferences) (Preferences, error) {
 	s.mu.Lock()
+	oldSync := s.cfg.Sync
 	s.cfg.Presets = p.Presets
 	s.cfg.Alarm = p.Alarm
+	// The device id is Go's; only the folder and name come from the frontend.
+	s.cfg.Sync.Folder = p.Sync.Folder
+	s.cfg.Sync.DeviceName = p.Sync.DeviceName
 	s.cfg.Normalise()
-	saved := Preferences{Presets: s.cfg.Presets, Alarm: s.cfg.Alarm}
 	cfg := s.cfg
 	s.mu.Unlock()
 
-	cfg.Timers = s.manager.Snapshot()
+	// Switch sharing on, off or to another folder before saving, so the
+	// settings file never keeps timers that have moved into the shared log.
+	syncErr := s.applySync(oldSync, cfg.Sync)
+	s.mu.Lock()
+	if syncErr != nil {
+		// Sharing did not start, so leave it off rather than half set up.
+		s.cfg.Sync.Folder = ""
+	}
+	cfg = s.cfg
+	saved := Preferences{Presets: cfg.Presets, Alarm: cfg.Alarm, Sync: cfg.Sync}
+	s.mu.Unlock()
+
+	cfg.Timers = s.timersToSave()
 	if err := s.store.Save(cfg); err != nil {
 		saved.Autostart, saved.AutostartAvailable = autostartState()
 		return saved, err
 	}
 
 	err := applyAutostart(p.Autostart)
+	if syncErr != nil {
+		err = errors.Join(syncErr, err)
+	}
 	// Report what the OS actually has now, whether or not the change worked.
 	saved.Autostart, saved.AutostartAvailable = autostartState()
 	return saved, err

@@ -44,6 +44,26 @@ export interface Preset {
 }
 
 /**
+ * Sync configures sharing running timers with other devices through a folder
+ * that another tool (Syncthing, Dropbox, ...) keeps in step. An empty Folder
+ * turns it off. Everything else in Settings stays on this device.
+ */
+export interface Sync {
+    "folder": string;
+
+    /**
+     * DeviceID names this device's log file. It is generated the first time sync
+     * is turned on and never edited by the user.
+     */
+    "deviceId": string;
+
+    /**
+     * DeviceName is shown in place of the id, and is part of the log file name.
+     */
+    "deviceName": string;
+}
+
+/**
  * TimerControls is the last hours/minutes/seconds entered in the main window's
  * time controls, restored when the app opens. Kept as the three fields as
  * entered rather than a total, so 80 minutes comes back as 80 minutes, not

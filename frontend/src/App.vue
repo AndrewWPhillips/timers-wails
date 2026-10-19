@@ -28,6 +28,7 @@ const {
   remove,
   savePreferences,
   pickAlarmFile,
+  pickSyncFolder,
   openSettingsFolder,
 } = useTimers();
 
@@ -221,6 +222,7 @@ onUnmounted(() => {
       :preferences="preferences"
       :preset-colors="presetColors"
       :pick-alarm-file="pickAlarmFile"
+      :pick-sync-folder="pickSyncFolder"
       :open-settings-folder="openSettingsFolder"
       :testing="testing"
       @save="onSave"
