@@ -245,7 +245,7 @@ func (s *TimerService) RestartTimer(id string) (timer.Timer, error) {
 
 // DismissTimer silences an expired timer but keeps it in the list.
 func (s *TimerService) DismissTimer(id string) (timer.Timer, error) {
-	t, err := s.manager.Dismiss(id)
+	t, err := s.manager.Dismiss(id, time.Now())
 	if err != nil {
 		return timer.Timer{}, err
 	}

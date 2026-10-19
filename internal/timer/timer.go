@@ -71,7 +71,8 @@ type Timer struct {
 	Color string `json:"color"`
 }
 
-// Remaining returns the time left at now, never negative.
+// Remaining returns the time left at now. It is never negative for a running
+// timer, but a dismissed timer holds its (negative) overrun.
 func (t Timer) Remaining(now time.Time) time.Duration {
 	if t.State != StateRunning {
 		return time.Duration(t.RemainingMS) * time.Millisecond
@@ -200,14 +201,18 @@ func (m *Manager) Restart(id string, now time.Time) (Timer, error) {
 }
 
 // Dismiss silences an expired timer without removing it, so the user can still
-// see which timer finished and restart it if they want.
-func (m *Manager) Dismiss(id string) (Timer, error) {
+// see which timer finished and restart it if they want. The time it overran by
+// is frozen into RemainingMS as a negative value, so the card keeps showing it.
+func (m *Manager) Dismiss(id string, now time.Time) (Timer, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	t, err := m.get(id)
 	if err != nil {
 		return Timer{}, err
+	}
+	if t.Alarming && t.State == StateExpired {
+		t.RemainingMS = min(0, t.EndsAtMS-now.UnixMilli())
 	}
 	t.Alarming = false
 	return *t, nil
