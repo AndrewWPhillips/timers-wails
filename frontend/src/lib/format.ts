@@ -13,9 +13,17 @@ function pad(n: number): string {
  *
  * The hours field only appears once it is needed, so short timers stay easy to
  * read at a glance.
+ *
+ * A negative duration is an overrun past expiry and is shown with a leading
+ * minus ("-0:05"). It rounds towards zero, so "-0:01" appears one full second
+ * after the timer reaches "0:00".
  */
 export function formatRemaining(ms: number): string {
-  const total = Math.max(0, Math.ceil(ms / 1000));
+  if (ms < 0) {
+    const over = Math.floor(-ms / 1000);
+    return over > 0 ? `-${formatRemaining(over * 1000)}` : formatRemaining(0);
+  }
+  const total = Math.ceil(ms / 1000);
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
   const seconds = total % 60;

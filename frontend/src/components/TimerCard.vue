@@ -33,8 +33,15 @@ const expired = computed(() => props.timer.state === State.StateExpired);
  * real time while the window is hidden, and without the upper clamp a render
  * during that window would briefly show more time remaining than the timer was
  * ever set for.
+ *
+ * An expired timer that is still alarming keeps counting past its deadline, so
+ * the display goes negative and shows how long ago it finished. Dismissing
+ * freezes that overrun into remainingMs, which the backend stores.
  */
 const remainingMs = computed(() => {
+  if (expired.value && props.timer.alarming) {
+    return Math.min(0, props.timer.endsAtMs - props.now);
+  }
   if (!running.value) {
     return props.timer.remainingMs;
   }

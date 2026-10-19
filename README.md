@@ -49,6 +49,7 @@ Presets, alarm sounds and other settings stay on each device. Each device append
 `<name>-<id>.jsonl` file in the folder (so the sync tool never has a conflict to resolve), and entries for
 timers idle for more than 100 hours are removed. Keep the devices' clocks accurate (NTP): timers end at an
 absolute time.
+* etc
 
 ## Development
 

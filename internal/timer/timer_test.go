@@ -150,7 +150,7 @@ func TestUnknownIDIsNotFound(t *testing.T) {
 	if _, err := m.Restart("nope", base); !errors.Is(err, ErrNotFound) {
 		t.Errorf("Restart error = %v, want %v", err, ErrNotFound)
 	}
-	if _, err := m.Dismiss("nope"); !errors.Is(err, ErrNotFound) {
+	if _, err := m.Dismiss("nope", base); !errors.Is(err, ErrNotFound) {
 		t.Errorf("Dismiss error = %v, want %v", err, ErrNotFound)
 	}
 	if _, err := m.Rename("nope", "x"); !errors.Is(err, ErrNotFound) {
@@ -264,7 +264,7 @@ func TestDismissSilencesButKeepsTimer(t *testing.T) {
 		t.Fatal("Alarming() = false after expiry, want true")
 	}
 
-	dismissed, err := m.Dismiss(created.ID)
+	dismissed, err := m.Dismiss(created.ID, base.Add(90*time.Second))
 	if err != nil {
 		t.Fatalf("Dismiss: %v", err)
 	}
@@ -273,6 +273,9 @@ func TestDismissSilencesButKeepsTimer(t *testing.T) {
 	}
 	if dismissed.State != StateExpired {
 		t.Errorf("State = %q, want %q — dismissing must not remove the timer", dismissed.State, StateExpired)
+	}
+	if dismissed.RemainingMS != -30000 {
+		t.Errorf("RemainingMS = %d, want -30000 — the overrun must be kept", dismissed.RemainingMS)
 	}
 	if m.Alarming() {
 		t.Error("Alarming() = true after dismissing the only timer, want false")

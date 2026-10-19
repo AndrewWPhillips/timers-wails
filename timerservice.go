@@ -291,10 +291,12 @@ func (s *TimerService) DismissTimer(id string) (timer.Timer, error) {
 	s.syncMu.Lock()
 	defer s.syncMu.Unlock()
 
-	t, err := s.manager.Dismiss(id)
-	if err == nil {
-		s.persist()
+	t, err := s.manager.Dismiss(id, time.Now())
+	if err != nil {
+		_ = s.syncResult(t, err, timersync.Entry{Op: timersync.OpDismiss, EndsAt: t.EndsAtMS})
+		return timer.Timer{}, err
 	}
+	s.persist()
 	return s.syncResult(t, err, timersync.Entry{Op: timersync.OpDismiss, EndsAt: t.EndsAtMS})
 }
 
@@ -403,6 +405,7 @@ func (s *TimerService) SavePreferences(p Preferences) (Preferences, error) {
 	s.cfg.Sync.Folder = p.Sync.Folder
 	s.cfg.Sync.DeviceName = p.Sync.DeviceName
 	s.cfg.Normalise()
+	saved := Preferences{Presets: s.cfg.Presets, Alarm: s.cfg.Alarm}
 	cfg := s.cfg
 	s.mu.Unlock()
 
