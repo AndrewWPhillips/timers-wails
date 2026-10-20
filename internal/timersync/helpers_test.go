@@ -1,0 +1,11 @@
+package timersync
+
+import (
+	"context"
+	"testing"
+)
+
+func contextWithCancel(t *testing.T) (context.Context, context.CancelFunc) {
+	t.Helper()
+	return context.WithCancel(context.Background())
+}
