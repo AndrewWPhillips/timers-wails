@@ -107,13 +107,13 @@ export function useTimers() {
     seconds: number,
     label: string,
     color = "",
-  ): Promise<boolean> {
+  ): Promise<string | null> {
     const created = await attempt(() => TimerService.CreateTimer(hours, minutes, seconds, label, color));
     if (created === undefined) {
-      return false;
+      return null;
     }
     timers.value = [...timers.value, created];
-    return true;
+    return created.id;
   }
 
   async function pause(id: string): Promise<void> {

@@ -57,14 +57,15 @@ func main() {
 	})
 
 	opts := application.WebviewWindowOptions{
-		Title:            "Timers",
-		Width:            500,
-		Height:           780,
-		MinWidth:         350,
-		MaxWidth:         700,
-		MinHeight:        520,
-		BackgroundColour: application.NewRGB(17, 18, 23),
-		URL:              "/",
+		Title:              "Timers",
+		Width:              500,
+		Height:             780,
+		MinWidth:           350,
+		MaxWidth:           700,
+		MinHeight:          520,
+		BackgroundColour:   application.NewRGB(17, 18, 23),
+		URL:                "/",
+		ZoomControlEnabled: true,
 	}
 	applySavedBounds(&opts, saved.Window)
 

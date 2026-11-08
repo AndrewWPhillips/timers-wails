@@ -72,14 +72,35 @@ watch(justExpired, async (ids) => {
   card?.scrollIntoView({ behavior: "smooth", block: "nearest" });
 });
 
-async function startPreset(seconds: number, label: string, color: string): Promise<void> {
-  await create(0, 0, seconds, label, color);
+/** The cards on screen, by timer id, so a new timer's name can be selected. */
+const cardRefs = new Map<string, InstanceType<typeof TimerCard>>();
+
+function setCardRef(id: string, card: unknown): void {
+  if (card) {
+    cardRefs.set(id, card as InstanceType<typeof TimerCard>);
+  } else {
+    cardRefs.delete(id);
+  }
 }
 
-/** A timer from the time controls starts unnamed ("Untitled"); it can be
- *  renamed on its card. */
+/** A new timer's name is selected straight away, so the user can just type
+ *  a name (or press Enter or click away to keep the one it has). */
+async function editNewTimer(id: string | null): Promise<void> {
+  if (id === null) {
+    return;
+  }
+  await nextTick();
+  await cardRefs.get(id)?.startEdit();
+}
+
+async function startPreset(seconds: number, label: string, color: string): Promise<void> {
+  await editNewTimer(await create(0, 0, seconds, label, color));
+}
+
+/** A timer from the time controls starts unnamed ("Untitled"); its name is
+ *  selected so it can be named straight away. */
 async function startManual(hours: number, minutes: number, seconds: number): Promise<void> {
-  await create(hours, minutes, seconds, "");
+  await editNewTimer(await create(hours, minutes, seconds, ""));
 }
 
 /** The list builds upwards from the time controls, so when a timer is added
@@ -188,6 +209,7 @@ onUnmounted(() => {
       <TimerCard
         v-for="timer in timers"
         :key="timer.id"
+        :ref="(card) => setCardRef(timer.id, card)"
         :data-timer-id="timer.id"
         :timer="timer"
         :now="now"

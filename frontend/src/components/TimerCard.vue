@@ -94,6 +94,16 @@ function commit(): void {
 function cancel(): void {
   editing.value = false;
 }
+
+/** Restarting is often the moment to give a timer a new name, so the name is
+ *  selected ready to type over, as it is when a timer is first started. */
+function restart(): void {
+  emit("restart", props.timer.id);
+  void startEdit();
+}
+
+/** Lets the app select the name of a timer it has just started. */
+defineExpose({ startEdit });
 </script>
 
 <template>
@@ -149,7 +159,7 @@ function cancel(): void {
       </p>
 
       <span class="buttons">
-        <button @click="emit('restart', timer.id)">Restart</button>
+        <button @click="restart">Restart</button>
         <button v-if="timer.alarming" class="primary" @click="emit('dismiss', timer.id)">Dismiss</button>
         <button v-if="running" class="primary pause" @click="emit('pause', timer.id)">Pause</button>
         <button v-if="paused" class="primary" @click="emit('resume', timer.id)">Resume</button>
