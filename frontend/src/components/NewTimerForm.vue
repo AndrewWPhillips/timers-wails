@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 
 import { TimerService } from "../../bindings/github.com/andrewwphillips/timers-wails";
 import { vDragNumber } from "../directives/dragNumber";
-import { formatDuration, toSeconds } from "../lib/format";
+import { endTimeTooltip, formatDuration, formatEndTime, msUntilEndTimeChanges, toSeconds } from "../lib/format";
 
 // No name is asked for here: a new timer starts as "Untitled" and can be
 // renamed at any time by clicking its name on the card.
@@ -78,6 +78,49 @@ onUnmounted(() => {
 const totalSeconds = computed(() => toSeconds(value(hours.value), value(minutes.value), value(seconds.value)));
 const valid = computed(() => totalSeconds.value > 0);
 
+/**
+ * When a timer started now would end, to the nearest minute. `now` is only
+ * moved on when the rounded result would actually change -- once a minute --
+ * rather than ticking every second, and is refreshed straight away whenever
+ * the duration is edited.
+ */
+const now = ref(Date.now());
+let clockTimer: ReturnType<typeof setTimeout> | null = null;
+
+const endTime = computed(() => formatEndTime(now.value + totalSeconds.value * 1000, now.value));
+
+function refreshClock(): void {
+  now.value = Date.now();
+  if (clockTimer !== null) {
+    clearTimeout(clockTimer);
+  }
+  // A little past the change point, so the rounding has definitely flipped.
+  const delay = msUntilEndTimeChanges(now.value + totalSeconds.value * 1000) + 50;
+  clockTimer = setTimeout(refreshClock, delay);
+}
+
+watch(totalSeconds, refreshClock);
+
+/** Timers in a hidden or minimised window can be delayed by the browser, so
+ *  catch up as soon as it is visible again. */
+function onVisibility(): void {
+  if (document.visibilityState === "visible") {
+    refreshClock();
+  }
+}
+
+onMounted(() => {
+  refreshClock();
+  document.addEventListener("visibilitychange", onVisibility);
+});
+
+onUnmounted(() => {
+  if (clockTimer !== null) {
+    clearTimeout(clockTimer);
+  }
+  document.removeEventListener("visibilitychange", onVisibility);
+});
+
 function submit(): void {
   if (!valid.value) {
     return;
@@ -90,7 +133,7 @@ function submit(): void {
   <form class="form" @submit.prevent="submit">
     <div class="row">
       <div class="fields">
-        <label class="field time">
+        <label class="field time hours">
           <span>Hour</span>
           <input v-model="hours" v-drag-number type="number" min="0" max="99" inputmode="numeric" />
         </label>
@@ -104,11 +147,22 @@ function submit(): void {
         </label>
       </div>
 
-      <p class="hint" :class="{ muted: !valid }">
-        {{ valid ? formatDuration(totalSeconds) : "Set a duration to start a timer" }}
-      </p>
+      <!-- The end time sits beside Start when there is room, or above it in a
+           narrow window (see the media query below). -->
+      <div class="go">
+        <p class="hint" :class="{ muted: !valid }" :title="valid ? endTimeTooltip : undefined">
+          <template v-if="valid">
+            <span class="long-hint">{{ endTime }} ({{ formatDuration(totalSeconds) }})</span>
+            <span class="short-hint">{{ endTime }}</span>
+          </template>
+          <template v-else>
+            <span class="long-hint">Click and drag to set the time, then click Start</span>
+            <span class="short-hint">Set time, click Start</span>
+          </template>
+        </p>
 
-      <button type="submit" class="start" :disabled="!valid">Start</button>
+        <button type="submit" class="start" :disabled="!valid">Start</button>
+      </div>
     </div>
   </form>
 </template>
@@ -138,9 +192,16 @@ function submit(): void {
   min-width: 0;
 }
 
+/* Minutes and seconds are not limited to 59, so they are wide enough for
+   three digits beside the native up/down spinner (which reserves its space
+   even when hidden). Hours never exceed 99, so that one can be narrower. */
 .field.time {
   flex: none;
-  width: 60px;
+  width: 64px;
+}
+
+.field.time.hours {
+  width: 52px;
 }
 
 .field span {
@@ -163,7 +224,7 @@ input {
   border-radius: 8px;
   color: var(--text);
   font-size: 1rem;
-  padding: 8px 10px;
+  padding: 8px 6px;
   width: 100%;
   font-variant-numeric: tabular-nums;
 }
@@ -216,5 +277,56 @@ input:focus {
 
 .hint.muted {
   color: var(--muted);
+}
+
+/* The end time and Start, side by side: the end time takes the space between
+   the time fields and Start. */
+.go {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+/* The long hint (the end time plus the duration, or the full instructions)
+   only fits in a wide window; otherwise the short one is used (the end time
+   alone, or "Set time, click Start"). */
+.hint .long-hint {
+  display: none;
+}
+
+@media (min-width: 420px) {
+  .hint .long-hint {
+    display: inline;
+  }
+
+  .hint .short-hint {
+    display: none;
+  }
+}
+
+/* In a narrow window the time fields and Start leave no room for the end
+   time beside them (at the 350px minimum it would have zero width), so it
+   moves up above Start: still starting just right of the SEC field, and
+   allowed to wrap. Start stays at the right. */
+@media (max-width: 459px) {
+  .go {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+
+  .hint {
+    flex: none;
+    overflow: visible;
+    white-space: normal;
+    font-size: 0.72rem;
+    line-height: 1.25;
+  }
+
+  .start {
+    align-self: flex-end;
+  }
 }
 </style>

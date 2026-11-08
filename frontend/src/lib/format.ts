@@ -51,6 +51,45 @@ export function formatDuration(seconds: number): string {
   return parts.join(" ");
 }
 
+const minuteMs = 60_000;
+
+/** Rounds a time (ms since the epoch) to the nearest whole minute. */
+export function roundToMinute(ms: number): number {
+  return Math.round(ms / minuteMs) * minuteMs;
+}
+
+/**
+ * Formats when a timer would end, to the nearest minute, in the user's local
+ * time format (12- or 24-hour, as their system is set): "14:32". A timer can
+ * run up to 99 hours, so an end on a later day adds the weekday: "Tue 09:15".
+ *
+ * A non-breaking space keeps "7:20 PM" together, so if a narrow layout has to
+ * wrap it, the break falls between the day and the time ("Tue / 7:20 PM")
+ * rather than before "PM".
+ */
+export function formatEndTime(endMs: number, nowMs: number): string {
+  const end = new Date(roundToMinute(endMs));
+  const time = end.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }).replace(/\s/g, " ");
+  if (end.toDateString() === new Date(nowMs).toDateString()) {
+    return time;
+  }
+  return `${end.toLocaleDateString([], { weekday: "short" })} ${time}`;
+}
+
+/** The tooltip for the end time. The hint shows only a bare time ("14:32"),
+ *  so this says what that time is. */
+export const endTimeTooltip = "End time (nearest minute)";
+
+/**
+ * How long until the rounded end time next changes. Rounding flips over when
+ * the exact end time passes a half-minute (hh:mm:30), so that is once a
+ * minute, at a point that depends on the duration rather than on the clock's
+ * own minute boundary.
+ */
+export function msUntilEndTimeChanges(endMs: number): number {
+  return minuteMs - ((((endMs + minuteMs / 2) % minuteMs) + minuteMs) % minuteMs);
+}
+
 /** Splits a number of seconds into hours, minutes and seconds fields. */
 export function splitDuration(seconds: number): { hours: number; minutes: number; seconds: number } {
   return {
