@@ -160,7 +160,7 @@ defineExpose({ startEdit });
 
       <span class="buttons">
         <button @click="restart">Restart</button>
-        <button v-if="timer.alarming" class="primary" @click="emit('dismiss', timer.id)">Dismiss</button>
+        <button v-if="timer.alarming" class="primary" @click="emit('dismiss', timer.id)">Ack</button>
         <button v-if="running" class="primary pause" @click="emit('pause', timer.id)">Pause</button>
         <button v-if="paused" class="primary" @click="emit('resume', timer.id)">Resume</button>
       </span>

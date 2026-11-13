@@ -1,6 +1,6 @@
 module github.com/andrewwphillips/timers-wails
 
-go 1.25.0
+go 1.27
 
 require github.com/wailsapp/wails/v3 v3.0.0-beta.21
 
