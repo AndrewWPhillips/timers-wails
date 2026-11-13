@@ -95,6 +95,14 @@ export function PickAlarmFile(): $CancellablePromise<string> {
 }
 
 /**
+ * PickSyncFolder opens a native folder picker and returns the chosen folder, or
+ * an empty string if the user cancelled.
+ */
+export function PickSyncFolder(): $CancellablePromise<string> {
+    return $Call.ByID(3792960654);
+}
+
+/**
  * PresetColors returns the fixed palette a new preset's colour is drawn
  * from. Go is the only place this list is defined -- the frontend fetches it
  * rather than keeping its own hardcoded copy, which had drifted out of sync

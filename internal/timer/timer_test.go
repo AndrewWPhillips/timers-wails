@@ -432,3 +432,29 @@ func TestSnapshotRoundTripsThroughRestore(t *testing.T) {
 		}
 	}
 }
+
+func TestReplaceReportsNewlyAlarmingOnly(t *testing.T) {
+	m := New()
+	m.Replace([]Timer{
+		{ID: "a", State: StateExpired, Alarming: true},
+		{ID: "b", State: StateRunning},
+	})
+
+	started := m.Replace([]Timer{
+		{ID: "a", State: StateExpired, Alarming: true}, // already alarming
+		{ID: "b", State: StateExpired, Alarming: true}, // just started
+		{ID: "c", State: StateExpired, Alarming: true}, // new and alarming
+		{ID: "", State: StateExpired, Alarming: true},  // no id: skipped
+	})
+	if len(started) != 2 || started[0].ID != "b" || started[1].ID != "c" {
+		t.Fatalf("started = %+v", started)
+	}
+	if got := m.List(); len(got) != 3 {
+		t.Fatalf("list = %+v", got)
+	}
+
+	// Dismissed elsewhere: stops alarming, and is not reported as started.
+	if started := m.Replace([]Timer{{ID: "a", State: StateExpired}}); len(started) != 0 || m.Alarming() {
+		t.Fatalf("dismissed timer: started=%+v alarming=%v", started, m.Alarming())
+	}
+}

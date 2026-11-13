@@ -33,6 +33,24 @@ There are other features that Claude added or made it easy to add:
 * you can assign a different progress bar colour for each preset
 * etc
 
+## Sharing timers between devices
+
+Running timers can be shared between your computers (Windows, Linux, macOS) through a folder
+that another tool, such as [Syncthing](https://syncthing.net) or Dropbox, keeps in step.
+Timers does no networking itself.
+
+1. In Settings, under *Share timers*, choose the same synced folder on each device and give each device a name.
+2. Starting, pausing, resuming, restarting, renaming, dismissing and deleting a timer on one device is applied
+   on the others within a few seconds. A timer rings on every device and dismissing it on one silences all.
+3. A timer that finished while a device was off rings when that device next starts, unless it was dismissed,
+   paused or deleted elsewhere in the meantime.
+
+Presets, alarm sounds and other settings stay on each device. Each device appends to its own
+`<name>-<id>.jsonl` file in the folder (so the sync tool never has a conflict to resolve), and entries for
+timers idle for more than 100 hours are removed. Keep the devices' clocks accurate (NTP): timers end at an
+absolute time.
+* etc
+
 ## Development
 
 I used Claude Code to create the app using Go (golang) with [Wails v3](https://v3.wails.io) specifying 

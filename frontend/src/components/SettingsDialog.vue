@@ -16,6 +16,8 @@ const props = defineProps<{
    *  undefined if the user cancelled it or it failed. Owned by the parent
    *  since it is a thin wrapper over the bound Go call. */
   pickAlarmFile: () => Promise<string | undefined>;
+  /** Same, for the folder that timers are shared through. */
+  pickSyncFolder: () => Promise<string | undefined>;
   /** Opens the settings file's folder in the system file manager. */
   openSettingsFolder: () => Promise<void>;
   /** True while a Test preview is playing, so the Test button offers Stop. */
@@ -73,6 +75,23 @@ async function onChooseSound(): Promise<void> {
   }
 }
 
+/** Like onChooseSound, for the sync folder. Shares pickingSound: it guards
+ *  against any native picker being open, whichever one it is. */
+async function onChooseSyncFolder(): Promise<void> {
+  if (pickingSound.value) {
+    return;
+  }
+  pickingSound.value = true;
+  try {
+    const path = await props.pickSyncFolder();
+    if (path) {
+      syncFolder.value = path;
+    }
+  } finally {
+    pickingSound.value = false;
+  }
+}
+
 /**
  * Ignore any attempt to close while a sound pick is outstanding: the native
  * file dialog is a separate window with its own lifecycle, and letting this
@@ -106,6 +125,9 @@ const muted = ref(false);
 /** Run at login. Like every other field, only applied (by Go) on Save. */
 const autostart = ref(false);
 const soundFile = ref("");
+/** Folder timers are shared through ("" = not shared), and this device's name. */
+const syncFolder = ref("");
+const syncName = ref("");
 
 /** Slider granularity, and the lowest end volume (matches settings.VolumeStep
  *  in Go, which enforces the same on save). */
@@ -176,6 +198,8 @@ watch(
     muted.value = prefs.alarm.muted;
     autostart.value = prefs.autostart;
     soundFile.value = prefs.alarm.soundFile;
+    syncFolder.value = prefs.sync.folder;
+    syncName.value = prefs.sync.deviceName;
   },
   { immediate: true, deep: true },
 );
@@ -227,6 +251,7 @@ function save(): void {
     alarm: alarmValues(),
     autostart: autostart.value,
     autostartAvailable: props.preferences.autostartAvailable,
+    sync: { ...props.preferences.sync, folder: syncFolder.value, deviceName: syncName.value },
   });
 }
 
@@ -383,6 +408,32 @@ function clearSound(): void {
             <span>seconds</span>
           </span>
           <span></span>
+        </div>
+
+        <h3>Share timers</h3>
+        <div class="sound">
+          <p class="current">
+            <template v-if="syncFolder">{{ syncFolder }}</template>
+            <template v-else>Not shared - timers stay on this device</template>
+          </p>
+          <div class="sound-actions">
+            <button :disabled="pickingSound" @click="onChooseSyncFolder">Choose folder&hellip;</button>
+            <button v-if="syncFolder" @click="syncFolder = ''">Stop sharing</button>
+          </div>
+          <input
+            v-if="syncFolder"
+            v-model="syncName"
+            type="text"
+            maxlength="40"
+            placeholder="This device's name (e.g. Home PC)"
+            aria-label="This device's name"
+          />
+          <p class="note">
+            See timers on all your devices using this shared location.
+            You can use cloud storage like Google Drive, DropBox, etc or
+            peer-to-peer file synchronisation like SyncThing (recommended).
+            For best results also ensure your clocks are aligned.
+          </p>
         </div>
       </div>
 

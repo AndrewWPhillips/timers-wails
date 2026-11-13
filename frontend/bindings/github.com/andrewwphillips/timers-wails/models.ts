@@ -39,6 +39,12 @@ export interface Preferences {
     "autostart": boolean;
 
     /**
+     * Sync is where, and as whom, running timers are shared with other devices.
+     * DeviceID is filled in by Go and ignored if the frontend sends one.
+     */
+    "sync": settings$0.Sync;
+
+    /**
      * AutostartAvailable is false where autostart is unsupported (e.g. the
      * headless server build). Read-only: SavePreferences ignores it.
      */

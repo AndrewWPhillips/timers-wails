@@ -3,7 +3,7 @@ import { Events } from "@wailsio/runtime";
 
 import { TimerService } from "../../bindings/github.com/andrewwphillips/timers-wails";
 import type { Preferences } from "../../bindings/github.com/andrewwphillips/timers-wails";
-import type { Alarm, Preset } from "../../bindings/github.com/andrewwphillips/timers-wails/internal/settings";
+import type { Alarm, Preset, Sync } from "../../bindings/github.com/andrewwphillips/timers-wails/internal/settings";
 import type { Timer } from "../../bindings/github.com/andrewwphillips/timers-wails/internal/timer";
 
 /**
@@ -20,6 +20,8 @@ export interface Prefs {
   autostart: boolean;
   /** False where run-at-startup is unsupported, e.g. the server build. */
   autostartAvailable: boolean;
+  /** Where, and as whom, running timers are shared with other devices. */
+  sync: Sync;
 }
 
 function toPrefs(p: Preferences): Prefs {
@@ -28,6 +30,7 @@ function toPrefs(p: Preferences): Prefs {
     alarm: p.alarm,
     autostart: p.autostart,
     autostartAvailable: p.autostartAvailable,
+    sync: p.sync,
   };
 }
 
@@ -49,6 +52,7 @@ export function useTimers() {
     alarm: { soundFile: "", startVolume: 0.8, endVolume: 0.8, rampSeconds: 60, muted: false },
     autostart: false,
     autostartAvailable: false,
+    sync: { folder: "", deviceId: "", deviceName: "" },
   });
   /** The fixed palette a new preset's colour is drawn from. Fetched from Go
    *  (the only place it is defined) rather than hardcoded here too. */
@@ -171,6 +175,10 @@ export function useTimers() {
     return attempt(() => TimerService.PickAlarmFile());
   }
 
+  async function pickSyncFolder(): Promise<string | undefined> {
+    return attempt(() => TimerService.PickSyncFolder());
+  }
+
   /** ids of timers that expired most recently, so the UI can bring them into view. */
   const justExpired = ref<string[]>([]);
 
@@ -206,6 +214,7 @@ export function useTimers() {
     remove,
     savePreferences,
     pickAlarmFile,
+    pickSyncFolder,
     openSettingsFolder,
   };
 }
