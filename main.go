@@ -1,4 +1,4 @@
-// Command timers is a desktop countdown timer app: any number of timers can run
+// Timers allows you to quickly start any number of countdown timers,
 // at once, each set by hand or from a configurable preset, and each flashes and
 // sounds an alarm when it reaches zero.
 package main
@@ -39,7 +39,7 @@ func main() {
 	saved, _ := store.Load()
 
 	app := application.New(application.Options{
-		Name:        "Timers",
+		Name:        "Go Timers",
 		Description: "Countdown timers",
 		Services: []application.Service{
 			application.NewService(timers),
@@ -57,7 +57,7 @@ func main() {
 	})
 
 	opts := application.WebviewWindowOptions{
-		Title:              "Timers",
+		Title:              "Go Timers",
 		Width:              500,
 		Height:             780,
 		MinWidth:           350,

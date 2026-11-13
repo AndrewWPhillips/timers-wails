@@ -5,18 +5,18 @@
   xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
-  IgnorableNamespaces="uap3">
+  IgnorableNamespaces="uap rescap">
   
   <Identity 
-    Name="com.github.AndrewWPhillips.timers"
-    Publisher="CN=My Company"
-    Version="0.1.0.0" 
+    Name="SilverGopher.GoTimers"
+    Publisher="CN=F0E5E585-7F31-45BE-9531-B42C264D9503"
+    Version="1.0.0.0"
     ProcessorArchitecture="x64" />
   
   <Properties>
-    <DisplayName>My Product</DisplayName>
-    <PublisherDisplayName>My Company</PublisherDisplayName>
-    <Description>A timers application</Description>
+    <DisplayName>Go Timers</DisplayName>
+    <PublisherDisplayName>Silver Gopher</PublisherDisplayName>
+    <Description>Easily create an unlimited number of timers and share them between devices</Description>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
   
@@ -29,9 +29,9 @@
   </Resources>
   
   <Applications>
-    <Application Id="com.github.AndrewWPhillips.timers" Executable="timers.exe" EntryPoint="Windows.FullTrustApplication">
+    <Application Id="io.github.AndrewWPhillips.timers" Executable="timers.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
-        DisplayName="My Product"
+        DisplayName="Go Timers"
         Description="A timers application"
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"

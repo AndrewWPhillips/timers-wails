@@ -4,12 +4,12 @@
 	},
 	"info": {
 		"0000": {
-			"ProductVersion": "0.1.0",
-			"CompanyName": "My Company",
-			"FileDescription": "A timers application",
-			"LegalCopyright": "© 2026, My Company",
-			"ProductName": "My Product",
-			"Comments": "This is a comment"
+			"ProductVersion": "1.0.0",
+			"CompanyName": "Silver Gopher",
+			"FileDescription": "Easily create an unlimited number of timers and share them between devices",
+			"LegalCopyright": "© 2026, Andrew W. Phillips",
+			"ProductName": "Go Timers",
+			"Comments": "This is taken from build/windows/info.json"
 		}
 	}
 }
