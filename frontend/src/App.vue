@@ -24,6 +24,7 @@ const {
   resume,
   restart,
   dismiss,
+  setRepeat,
   rename,
   remove,
   savePreferences,
@@ -218,6 +219,7 @@ onUnmounted(() => {
         @resume="resume"
         @restart="restart"
         @dismiss="dismiss"
+        @repeat="setRepeat"
         @rename="rename"
         @remove="remove"
       />

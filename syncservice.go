@@ -128,6 +128,9 @@ func (s *TimerService) exportMissing(log *timersync.Log, dir string) {
 			}
 		}
 		write(timersync.Entry{Op: timersync.OpNew, Label: t.Label, Color: t.Color, TotalMS: t.TotalMS, EndsAt: endsAt})
+		if t.Repeat {
+			write(timersync.Entry{Op: timersync.OpRepeat, Repeat: true})
+		}
 		switch {
 		case t.State == timer.StatePaused:
 			write(timersync.Entry{Op: timersync.OpPause, RemainingMS: t.RemainingMS})

@@ -295,7 +295,25 @@ func (s *TimerService) DismissTimer(id string) (timer.Timer, error) {
 	if err == nil {
 		s.persist()
 	}
-	return s.syncResult(t, err, timersync.Entry{Op: timersync.OpDismiss, EndsAt: t.EndsAtMS, RemainingMS: t.RemainingMS})
+	// The dismissal names the deadline whose passing set the alarm off: for a
+	// repeating timer that is the one before its current deadline.
+	endsAt := t.EndsAtMS
+	if t.State == timer.StateRunning && t.Repeat {
+		endsAt = t.LastEndMS()
+	}
+	return s.syncResult(t, err, timersync.Entry{Op: timersync.OpDismiss, EndsAt: endsAt, RemainingMS: t.RemainingMS})
+}
+
+// SetTimerRepeat turns a timer's repeat option on or off.
+func (s *TimerService) SetTimerRepeat(id string, repeat bool) (timer.Timer, error) {
+	s.syncMu.Lock()
+	defer s.syncMu.Unlock()
+
+	t, err := s.manager.SetRepeat(id, repeat, time.Now())
+	if err == nil {
+		s.persist()
+	}
+	return s.syncResult(t, err, timersync.Entry{Op: timersync.OpRepeat, Repeat: repeat})
 }
 
 // RenameTimer changes a timer's label. Surrounding whitespace is trimmed; an
