@@ -140,6 +140,11 @@ export function useTimers() {
     if (updated !== undefined) replace(updated);
   }
 
+  async function setRepeat(id: string, repeat: boolean): Promise<void> {
+    const updated = await attempt(() => TimerService.SetTimerRepeat(id, repeat));
+    if (updated !== undefined) replace(updated);
+  }
+
   async function rename(id: string, label: string): Promise<void> {
     const updated = await attempt(() => TimerService.RenameTimer(id, label));
     if (updated !== undefined) replace(updated);
@@ -210,6 +215,7 @@ export function useTimers() {
     resume,
     restart,
     dismiss,
+    setRepeat,
     rename,
     remove,
     savePreferences,

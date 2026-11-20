@@ -17,6 +17,7 @@ const emit = defineEmits<{
   resume: [id: string];
   restart: [id: string];
   dismiss: [id: string];
+  repeat: [id: string, repeat: boolean];
   rename: [id: string, label: string];
   remove: [id: string];
 }>();
@@ -37,6 +38,10 @@ const expired = computed(() => props.timer.state === State.StateExpired);
  * An expired timer that is still alarming keeps counting past its deadline, so
  * the display goes negative and shows how long ago it finished. Dismissing
  * freezes that overrun into remainingMs, which the backend stores.
+ *
+ * A repeating timer never goes negative: past its deadline it wraps round to
+ * count down from its total again. Go moves the deadline on at its next tick,
+ * but wrapping here as well keeps the display from sticking at zero meanwhile.
  */
 const remainingMs = computed(() => {
   if (expired.value && props.timer.alarming) {
@@ -45,7 +50,10 @@ const remainingMs = computed(() => {
   if (!running.value) {
     return props.timer.remainingMs;
   }
-  const left = props.timer.endsAtMs - props.now;
+  let left = props.timer.endsAtMs - props.now;
+  if (props.timer.repeat && left <= 0 && props.timer.totalMs > 0) {
+    left = props.timer.totalMs - (-left % props.timer.totalMs);
+  }
   return Math.min(props.timer.totalMs, Math.max(0, left));
 });
 
@@ -159,9 +167,31 @@ defineExpose({ startEdit });
       </p>
 
       <span class="buttons">
-        <button @click="restart">Restart</button>
+        <label class="repeat" title="Start again automatically each time it reaches zero">
+          <input
+            type="checkbox"
+            :checked="timer.repeat"
+            @change="emit('repeat', timer.id, ($event.target as HTMLInputElement).checked)"
+          />
+          repeat
+        </label>
+        <button class="restart" title="Restart" aria-label="Restart" @click="restart">
+          <!-- A circular "go round again" arrow. -->
+          <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+            <path
+              d="M20 12a8 8 0 1 1-2.34-5.66"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.4"
+              stroke-linecap="round"
+            />
+            <path d="M20.5 3.5v5.5H15z" fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round" />
+          </svg>
+        </button>
         <button v-if="timer.alarming" class="primary" @click="emit('dismiss', timer.id)">Ack</button>
-        <button v-if="running" class="primary pause" @click="emit('pause', timer.id)">Pause</button>
+        <!-- A repeating timer keeps running while it alarms; until it is
+             acknowledged Ack takes Pause's place. -->
+        <button v-if="running && !timer.alarming" class="primary pause" @click="emit('pause', timer.id)">Pause</button>
         <button v-if="paused" class="primary" @click="emit('resume', timer.id)">Resume</button>
       </span>
     </footer>
@@ -301,6 +331,10 @@ defineExpose({ startEdit });
   color: var(--text);
   /* Keeps "remaining / total" on one line beside the buttons. */
   white-space: nowrap;
+  /* Centres the smaller total vertically, rather than sitting it on the
+     big digits' baseline, so it lines up with the repeat checkbox. */
+  display: flex;
+  align-items: center;
 }
 
 .time.wide {
@@ -313,6 +347,8 @@ defineExpose({ startEdit });
   color: var(--muted);
   font-size: 0.7em;
   font-weight: 500;
+  /* As a flex item its leading space would otherwise be dropped. */
+  white-space: pre;
 }
 
 .is-expired .time {
@@ -348,7 +384,25 @@ defineExpose({ startEdit });
 
 .buttons {
   display: flex;
+  align-items: center;
   gap: 6px;
+}
+
+.repeat {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  margin-right: 2px;
+}
+
+.repeat input {
+  margin: 0;
+  accent-color: var(--timer-color, var(--accent));
+  cursor: pointer;
 }
 
 .buttons button:not(.icon) {
@@ -377,5 +431,12 @@ defineExpose({ startEdit });
 
 .buttons button.primary:hover {
   filter: brightness(1.15);
+}
+
+/* Icon only, so a little narrower than the text buttons. */
+.buttons button.restart {
+  display: flex;
+  align-items: center;
+  padding: 4px 7px;
 }
 </style>

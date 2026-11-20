@@ -58,4 +58,11 @@ export interface Timer {
      * timer created without a preset whence the frontend uses its default colour.
      */
     "color": string;
+
+    /**
+     * Repeat makes the timer start again from TotalMS each time it reaches
+     * zero, instead of expiring. Each time round it (re)starts alarming, and
+     * keeps alarming until dismissed, even across further repeats.
+     */
+    "repeat": boolean;
 }

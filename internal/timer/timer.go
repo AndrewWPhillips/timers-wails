@@ -69,6 +69,31 @@ type Timer struct {
 	// later cannot change the colour of a timer already running. Empty for a
 	// timer created without a preset whence the frontend uses its default colour.
 	Color string `json:"color"`
+	// Repeat makes the timer start again from TotalMS each time it reaches
+	// zero, instead of expiring. Each time round it (re)starts alarming, and
+	// keeps alarming until dismissed, even across further repeats.
+	Repeat bool `json:"repeat"`
+}
+
+// advance moves a running repeating timer's deadline on by whole periods until
+// it is after now, and reports whether it moved (i.e. whether it reached zero
+// at least once). Stepping by whole periods from the existing deadline, rather
+// than restarting from now, keeps every repeat in phase with the first run, so
+// another device folding the same history computes the same deadline.
+func (t *Timer) advance(now time.Time) bool {
+	ms := now.UnixMilli()
+	if t.State != StateRunning || !t.Repeat || t.TotalMS <= 0 || ms < t.EndsAtMS {
+		return false
+	}
+	k := (ms-t.EndsAtMS)/t.TotalMS + 1
+	t.EndsAtMS += k * t.TotalMS
+	return true
+}
+
+// LastEndMS is the deadline a running repeating timer most recently passed (one
+// period before its current deadline). Only meaningful while it is alarming.
+func (t Timer) LastEndMS() int64 {
+	return t.EndsAtMS - t.TotalMS
 }
 
 // Remaining returns the time left at now. It is never negative for a running
@@ -203,6 +228,7 @@ func (m *Manager) Restart(id string, now time.Time) (Timer, error) {
 // Dismiss silences an expired timer without removing it, so the user can still
 // see which timer finished and restart it if they want. The time it overran by
 // is frozen into RemainingMS as a negative value, so the card keeps showing it.
+// A repeating timer is simply silenced and carries on counting down.
 func (m *Manager) Dismiss(id string, now time.Time) (Timer, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -215,6 +241,39 @@ func (m *Manager) Dismiss(id string, now time.Time) (Timer, error) {
 		t.RemainingMS = min(0, t.EndsAtMS-now.UnixMilli())
 	}
 	t.Alarming = false
+	return *t, nil
+}
+
+// SetRepeat turns a timer's repeat option on or off.
+//
+// Turning it on for a timer that has expired but is still alarming puts the
+// timer back to running in phase with its original deadline, as though it had
+// been repeating all along. Turning it off for a repeating timer that is
+// alarming reverts it to an ordinary expired timer, counting its overrun from
+// the deadline it last passed. In any other state only the flag changes, and
+// the timer behaves accordingly the next time it reaches zero.
+func (m *Manager) SetRepeat(id string, repeat bool, now time.Time) (Timer, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	t, err := m.get(id)
+	if err != nil {
+		return Timer{}, err
+	}
+	if t.Repeat == repeat {
+		return *t, nil
+	}
+	t.Repeat = repeat
+	switch {
+	case repeat && t.State == StateExpired && t.Alarming:
+		t.State = StateRunning
+		t.RemainingMS = t.TotalMS
+		t.advance(now)
+	case !repeat && t.State == StateRunning && t.Alarming:
+		t.EndsAtMS = t.LastEndMS()
+		t.State = StateExpired
+		t.RemainingMS = 0
+	}
 	return *t, nil
 }
 
@@ -294,7 +353,9 @@ func (m *Manager) Tick(now time.Time) []Timer {
 	return m.expireDue(now)
 }
 
-// expireDue expires all overdue running timers. The caller must hold m.mu.
+// expireDue expires all overdue running timers. A repeating timer is not
+// expired but started again for another period, and alarms just the same. The
+// caller must hold m.mu.
 func (m *Manager) expireDue(now time.Time) []Timer {
 	var fired []Timer
 	for _, id := range m.order {
@@ -303,6 +364,12 @@ func (m *Manager) expireDue(now time.Time) []Timer {
 			continue
 		}
 		if now.UnixMilli() < t.EndsAtMS {
+			continue
+		}
+		if t.advance(now) {
+			t.RemainingMS = t.TotalMS
+			t.Alarming = true
+			fired = append(fired, *t)
 			continue
 		}
 		t.State = StateExpired

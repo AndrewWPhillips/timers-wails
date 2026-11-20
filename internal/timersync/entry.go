@@ -29,6 +29,8 @@ const (
 	// shows how late it was dismissed.
 	OpDismiss Op = "dismiss"
 	OpDelete  Op = "delete"
+	// OpRepeat turns the timer's repeat option on or off (Repeat).
+	OpRepeat Op = "repeat"
 )
 
 // Entry is one line of a device's log. Entries carry absolute values (EndsAt,
@@ -47,6 +49,7 @@ type Entry struct {
 	TotalMS     int64  `json:"totalMs,omitempty"`
 	RemainingMS int64  `json:"remainingMs,omitempty"`
 	EndsAt      int64  `json:"endsAt,omitempty"` // unix ms
+	Repeat      bool   `json:"repeat,omitempty"` // OpRepeat
 }
 
 // sortEntries puts entries in the one order every device replays them in.

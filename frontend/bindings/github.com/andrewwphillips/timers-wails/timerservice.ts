@@ -151,3 +151,10 @@ export function SavePreferences(p: $models.Preferences): $CancellablePromise<$mo
 export function SaveTimerControls(c: settings$0.TimerControls): $CancellablePromise<void> {
     return $Call.ByID(2029168972, c);
 }
+
+/**
+ * SetTimerRepeat turns a timer's repeat option on or off.
+ */
+export function SetTimerRepeat(id: string, repeat: boolean): $CancellablePromise<timer$0.Timer> {
+    return $Call.ByID(4012490870, id, repeat);
+}
