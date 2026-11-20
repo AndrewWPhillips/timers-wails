@@ -232,8 +232,9 @@ func (s *TimerService) timersToSave() []timer.Timer {
 // CreateTimer starts a new timer for the given duration. Minutes and seconds
 // are not limited to 59, so a preset of 7200 seconds can be passed straight
 // through without the caller converting it first. color is the originating
-// preset's colour, or "" for a timer started without one.
-func (s *TimerService) CreateTimer(hours, minutes, seconds int, label, color string) (timer.Timer, error) {
+// preset's colour, or "" for a timer started without one. repeat starts the
+// timer with its repeat option already on (a preset's own Repeat setting).
+func (s *TimerService) CreateTimer(hours, minutes, seconds int, label, color string, repeat bool) (timer.Timer, error) {
 	d := time.Duration(hours)*time.Hour +
 		time.Duration(minutes)*time.Minute +
 		time.Duration(seconds)*time.Second
@@ -241,13 +242,28 @@ func (s *TimerService) CreateTimer(hours, minutes, seconds int, label, color str
 	s.syncMu.Lock()
 	defer s.syncMu.Unlock()
 
-	t, err := s.manager.Create(d, label, color, time.Now())
+	now := time.Now()
+	t, err := s.manager.Create(d, label, color, now)
+	if err == nil && repeat {
+		// Cannot fail for a timer created a moment ago; if it somehow did, the
+		// new timer is still kept, just without repeat.
+		if r, rerr := s.manager.SetRepeat(t.ID, true, now); rerr == nil {
+			t = r
+		}
+	}
 	if err == nil {
 		s.persist()
 	}
-	return s.syncResult(t, err, timersync.Entry{
+	t, err = s.syncResult(t, err, timersync.Entry{
 		Op: timersync.OpNew, Label: t.Label, Color: t.Color, TotalMS: t.TotalMS, EndsAt: t.EndsAtMS,
 	})
+	// Shared as a separate repeat entry after the new one -- the same pair
+	// startSync writes for an existing repeating timer -- so the log format
+	// is unchanged and devices running an older build still understand it.
+	if err == nil && t.Repeat {
+		s.record(timersync.Entry{Op: timersync.OpRepeat, ID: t.ID, Repeat: true})
+	}
+	return t, err
 }
 
 // PauseTimer freezes a running timer.

@@ -13,7 +13,7 @@ function presetStyle(preset: Preset): Record<string, string> {
 }
 
 const emit = defineEmits<{
-  start: [seconds: number, label: string, color: string];
+  start: [seconds: number, label: string, color: string, repeat: boolean];
   edit: [];
 }>();
 </script>
@@ -25,7 +25,7 @@ const emit = defineEmits<{
       :key="`${preset.label}-${preset.seconds}`"
       class="preset"
       :style="presetStyle(preset)"
-      @click="emit('start', preset.seconds, preset.label, preset.color)"
+      @click="emit('start', preset.seconds, preset.label, preset.color, preset.repeat ?? false)"
     >
       {{ preset.label }}
     </button>

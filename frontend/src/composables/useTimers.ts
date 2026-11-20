@@ -111,8 +111,9 @@ export function useTimers() {
     seconds: number,
     label: string,
     color = "",
+    repeat = false,
   ): Promise<string | null> {
-    const created = await attempt(() => TimerService.CreateTimer(hours, minutes, seconds, label, color));
+    const created = await attempt(() => TimerService.CreateTimer(hours, minutes, seconds, label, color, repeat));
     if (created === undefined) {
       return null;
     }

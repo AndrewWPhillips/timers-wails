@@ -27,10 +27,11 @@ import * as $models from "./models.js";
  * CreateTimer starts a new timer for the given duration. Minutes and seconds
  * are not limited to 59, so a preset of 7200 seconds can be passed straight
  * through without the caller converting it first. color is the originating
- * preset's colour, or "" for a timer started without one.
+ * preset's colour, or "" for a timer started without one. repeat starts the
+ * timer with its repeat option already on (a preset's own Repeat setting).
  */
-export function CreateTimer(hours: number, minutes: number, seconds: number, label: string, color: string): $CancellablePromise<timer$0.Timer> {
-    return $Call.ByID(4113711277, hours, minutes, seconds, label, color);
+export function CreateTimer(hours: number, minutes: number, seconds: number, label: string, color: string, repeat: boolean): $CancellablePromise<timer$0.Timer> {
+    return $Call.ByID(4113711277, hours, minutes, seconds, label, color, repeat);
 }
 
 /**

@@ -114,6 +114,8 @@ interface Row {
   hours: number;
   minutes: number;
   seconds: number;
+  /** Timers started from this preset have repeat on from the start. */
+  repeat: boolean;
 }
 
 const rows = ref<Row[]>([]);
@@ -195,6 +197,7 @@ watch(
       // legacy/empty colour is shown before a save round-trips through Go's
       // own repair logic.
       color: preset.color || props.presetColors[0] || "",
+      repeat: preset.repeat ?? false,
       ...splitDuration(preset.seconds),
     }));
     startVolume.value = prefs.alarm.startVolume;
@@ -223,7 +226,7 @@ function addRow(): void {
     rows.value.map((r) => r.color),
     props.presetColors,
   );
-  rows.value = [...rows.value, { id: nextRowId++, label: "", color, hours: 0, minutes: 10, seconds: 0 }];
+  rows.value = [...rows.value, { id: nextRowId++, label: "", color, hours: 0, minutes: 10, seconds: 0, repeat: false }];
 }
 
 function removeRow(index: number): void {
@@ -336,6 +339,7 @@ function save(): void {
       label: row.label.trim(),
       color: row.color,
       seconds: rowSeconds(row),
+      repeat: row.repeat,
     }))
     .filter((preset) => preset.seconds > 0);
 
@@ -386,6 +390,7 @@ function clearSound(): void {
             <span class="col-heading">Min</span>
             <span class="col-heading">Sec</span>
           </span>
+          <span class="col-heading" aria-hidden="true">Rep</span>
           <span></span>
         </div>
         <ul ref="rowList" class="rows" :class="{ reordering: draggingId !== null }">
@@ -422,6 +427,13 @@ function clearSound(): void {
               <input v-model="row.minutes" v-drag-number class="num" type="number" min="0" max="59" aria-label="Minutes" />
               <input v-model="row.seconds" v-drag-number class="num" type="number" min="0" max="59" aria-label="Seconds" />
             </span>
+            <input
+              v-model="row.repeat"
+              class="rep"
+              type="checkbox"
+              title="Timers started from this preset repeat"
+              aria-label="Repeat"
+            />
             <button class="icon danger" title="Remove" aria-label="Remove" @click="removeRow(index)">&times;</button>
           </li>
         </ul>
@@ -658,7 +670,7 @@ h3 {
    the narrow dialog to the label. */
 .row {
   display: grid;
-  grid-template-columns: 28px 1fr 124px 20px;
+  grid-template-columns: 28px 1fr 124px 22px 20px;
   align-items: center;
   gap: 3px;
   border-radius: 8px;
@@ -690,6 +702,14 @@ h3 {
   /* Anchored to the bottom of the (taller, h3-containing) header row, same
      reason as .col-heading below. */
   align-self: end;
+}
+
+/* The per-preset repeat checkbox, centred under its "Rep" heading. */
+.rep {
+  justify-self: center;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
 }
 
 .hms-heading .col-heading {

@@ -95,8 +95,8 @@ async function editNewTimer(id: string | null): Promise<void> {
   await cardRefs.get(id)?.startEdit();
 }
 
-async function startPreset(seconds: number, label: string, color: string): Promise<void> {
-  await editNewTimer(await create(0, 0, seconds, label, color));
+async function startPreset(seconds: number, label: string, color: string, repeat: boolean): Promise<void> {
+  await editNewTimer(await create(0, 0, seconds, label, color, repeat));
 }
 
 /** A timer from the time controls starts unnamed ("Untitled"); its name is

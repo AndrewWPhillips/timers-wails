@@ -29,6 +29,9 @@ type Preset struct {
 	// Color is a "#rrggbb" hex string, used for a timer's progress bar and
 	// Pause button. Repaired by Normalise if missing or malformed.
 	Color string `json:"color"`
+	// Repeat is whether a timer started from this preset has its repeat
+	// option on from the start. Missing (older files) means off.
+	Repeat bool `json:"repeat"`
 }
 
 // PresetColors is the fixed palette a new preset's colour is drawn from.

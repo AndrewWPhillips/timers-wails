@@ -64,7 +64,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	s := storeInTempDir(t)
 
 	want := Settings{
-		Presets: []Preset{{Label: "Brew", Seconds: 210, Color: "#2dd4bf"}},
+		Presets: []Preset{{Label: "Brew", Seconds: 210, Color: "#2dd4bf", Repeat: true}},
 		Alarm:   Alarm{SoundFile: `C:\sounds\gong.wav`, StartVolume: 0.1, EndVolume: 0.4, RampSeconds: 20},
 		Timers: []timer.Timer{
 			{

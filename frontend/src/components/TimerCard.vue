@@ -173,7 +173,7 @@ defineExpose({ startEdit });
             :checked="timer.repeat"
             @change="emit('repeat', timer.id, ($event.target as HTMLInputElement).checked)"
           />
-          repeat
+          rep
         </label>
         <button class="restart" title="Restart" aria-label="Restart" @click="restart">
           <!-- A circular "go round again" arrow. -->

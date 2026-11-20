@@ -41,6 +41,12 @@ export interface Preset {
      * Pause button. Repaired by Normalise if missing or malformed.
      */
     "color": string;
+
+    /**
+     * Repeat is whether a timer started from this preset has its repeat
+     * option on from the start. Missing (older files) means off.
+     */
+    "repeat": boolean;
 }
 
 /**
