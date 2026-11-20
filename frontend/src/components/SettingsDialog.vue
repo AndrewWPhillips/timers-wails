@@ -106,6 +106,9 @@ function requestClose(): void {
 
 /** A preset broken into editable fields. */
 interface Row {
+  /** Stable identity for the v-for key, so a row's DOM (and the swatch being
+   *  dragged) moves with it when the list is reordered. Never saved. */
+  id: number;
   label: string;
   color: string;
   hours: number;
@@ -114,6 +117,7 @@ interface Row {
 }
 
 const rows = ref<Row[]>([]);
+let nextRowId = 0;
 const startVolume = ref(0.8);
 const endVolume = ref(0.8);
 const rampSeconds = ref(60);
@@ -185,6 +189,7 @@ watch(
   () => props.preferences,
   (prefs) => {
     rows.value = prefs.presets.map((preset) => ({
+      id: nextRowId++,
       label: preset.label,
       // Guards against a brief invalid value in the native colour input if a
       // legacy/empty colour is shown before a save round-trips through Go's
@@ -218,21 +223,109 @@ function addRow(): void {
     rows.value.map((r) => r.color),
     props.presetColors,
   );
-  rows.value = [...rows.value, { label: "", color, hours: 0, minutes: 10, seconds: 0 }];
+  rows.value = [...rows.value, { id: nextRowId++, label: "", color, hours: 0, minutes: 10, seconds: 0 }];
 }
 
 function removeRow(index: number): void {
   rows.value = rows.value.filter((_, i) => i !== index);
 }
 
-function move(index: number, delta: number): void {
-  const target = index + delta;
-  if (target < 0 || target >= rows.value.length) {
+/**
+ * Drag-to-reorder, using a preset's colour swatch as the handle.
+ *
+ * The swatch is still a native colour input, so a plain click must keep
+ * opening the colour picker. The drag only engages once the pointer has
+ * moved past a small threshold (as v-drag-number does); after a real drag
+ * the click the browser fires on release is swallowed, so the picker does
+ * not pop open at the end of every reorder.
+ *
+ * The row is moved live while dragging: whenever the pointer crosses the
+ * midpoint of another row, the dragged row takes that row's place. Move and
+ * up are tracked on window rather than through pointer capture, because the
+ * swatch element is itself moved around the DOM as the list reorders, and
+ * moving a node can drop its capture.
+ */
+const DRAG_THRESHOLD = 4;
+const rowList = ref<HTMLUListElement | null>(null);
+/** The row being dragged, once the drag has engaged (for its highlight). */
+const draggingId = ref<number | null>(null);
+
+function onSwatchPointerDown(row: Row, event: PointerEvent): void {
+  if (event.button !== 0) {
     return;
   }
-  const next = rows.value.slice();
-  [next[index], next[target]] = [next[target], next[index]];
-  rows.value = next;
+  const startY = event.clientY;
+  const pointerId = event.pointerId;
+  let engaged = false;
+
+  const move = (e: PointerEvent): void => {
+    if (e.pointerId !== pointerId) {
+      return;
+    }
+    if (!engaged) {
+      if (Math.abs(e.clientY - startY) < DRAG_THRESHOLD) {
+        return;
+      }
+      engaged = true;
+      draggingId.value = row.id;
+      (event.target as HTMLElement).blur();
+    }
+    reorderTo(row.id, e.clientY);
+  };
+
+  const up = (e: PointerEvent): void => {
+    if (e.pointerId !== pointerId) {
+      return;
+    }
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    window.removeEventListener("pointercancel", up);
+    if (!engaged) {
+      return; // a plain click: let it open the colour picker as usual
+    }
+    draggingId.value = null;
+    // The click (if any) follows straight after pointerup in the same task;
+    // block it so the picker doesn't open. The timeout clears the blocker if
+    // no click comes (e.g. released off the swatch, or pointercancel).
+    const block = (c: MouseEvent): void => {
+      c.preventDefault();
+      c.stopPropagation();
+    };
+    window.addEventListener("click", block, { capture: true, once: true });
+    setTimeout(() => window.removeEventListener("click", block, { capture: true }), 0);
+  };
+
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+  window.addEventListener("pointercancel", up);
+}
+
+/** Move the row with this id to the position under clientY: its new index is
+ *  the number of other rows whose midpoint is above the pointer. The DOM
+ *  read here is always up to date, since Vue re-renders in a microtask,
+ *  before the next pointermove arrives. */
+function reorderTo(id: number, clientY: number): void {
+  const from = rows.value.findIndex((r) => r.id === id);
+  const items = rowList.value?.children;
+  if (from < 0 || !items || items.length !== rows.value.length) {
+    return;
+  }
+  let to = 0;
+  for (let i = 0; i < items.length; i++) {
+    if (i === from) {
+      continue;
+    }
+    const rect = items[i].getBoundingClientRect();
+    if (rect.top + rect.height / 2 < clientY) {
+      to++;
+    }
+  }
+  if (to !== from) {
+    const next = rows.value.slice();
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    rows.value = next;
+  }
 }
 
 function save(): void {
@@ -288,45 +381,46 @@ function clearSound(): void {
 
         <div class="row row-header">
           <h3>Presets</h3>
-          <span></span>
           <span class="hms-heading" aria-hidden="true">
             <span class="col-heading">Hour</span>
             <span class="col-heading">Min</span>
             <span class="col-heading">Sec</span>
           </span>
-          <span class="col-heading" aria-hidden="true">Order</span>
           <span></span>
         </div>
-        <ul class="rows">
-          <li v-for="(row, index) in rows" :key="index" class="row">
+        <ul ref="rowList" class="rows" :class="{ reordering: draggingId !== null }">
+          <li
+            v-for="(row, index) in rows"
+            :key="row.id"
+            class="row"
+            :class="{ dragging: draggingId === row.id }"
+          >
+            <!-- Click to change the colour; drag to reorder the presets. A
+                 native colour input can't hold content, so the reorder icon
+                 is overlaid on it and lets every pointer event through. -->
+            <span class="swatch-wrap">
+              <input
+                v-model="row.color"
+                class="swatch"
+                type="color"
+                title="Click to change colour, drag to reorder"
+                :aria-label="`Colour for ${row.label || 'preset'}`"
+                @pointerdown="onSwatchPointerDown(row, $event)"
+              />
+              <svg
+                class="reorder-icon"
+                viewBox="0 0 14 12"
+                aria-hidden="true"
+              >
+                <path d="M7 0.5 10.5 3.5H3.5Z M3.5 8.5H10.5L7 11.5Z" fill="currentColor" />
+                <path d="M1 5H13M1 7H13" stroke="currentColor" stroke-width="1.1" />
+              </svg>
+            </span>
             <input v-model="row.label" class="label" type="text" maxlength="32" placeholder="Label" />
-            <input
-              v-model="row.color"
-              class="swatch"
-              type="color"
-              title="Preset colour"
-              :aria-label="`Colour for ${row.label || 'preset'}`"
-            />
             <span class="hms">
               <input v-model="row.hours" v-drag-number class="num" type="number" min="0" max="99" aria-label="Hours" />
               <input v-model="row.minutes" v-drag-number class="num" type="number" min="0" max="59" aria-label="Minutes" />
               <input v-model="row.seconds" v-drag-number class="num" type="number" min="0" max="59" aria-label="Seconds" />
-            </span>
-            <span class="arrows">
-              <button
-                class="icon arrow"
-                title="Move up"
-                aria-label="Move up"
-                :disabled="index === 0"
-                @click="move(index, -1)"
-              >&uarr;</button>
-              <button
-                class="icon arrow"
-                title="Move down"
-                aria-label="Move down"
-                :disabled="index === rows.length - 1"
-                @click="move(index, 1)"
-              >&darr;</button>
             </span>
             <button class="icon danger" title="Remove" aria-label="Remove" @click="removeRow(index)">&times;</button>
           </li>
@@ -531,6 +625,9 @@ h3 {
 }
 
 .row-header h3 {
+  /* Spans the swatch and label columns, so the heading starts flush left
+     rather than indented by the swatch. */
+  grid-column: 1 / 3;
   /* Same implicit min-width: auto issue as .label -- without this, "Presets"
      forces the 1fr column wider than the data rows' label input can match,
      shifting every column after it out of alignment at narrow widths. */
@@ -556,14 +653,30 @@ h3 {
    either empty or hold short static text, while the data rows' hold real
    inputs/buttons; with auto columns that mismatch would make the two rows
    compute a different width for the flexible label column and throw the
-   alignment off. Hour/min/sec and the two arrow buttons are each grouped
-   into one column (a tight inner flex row, see .hms/.arrows below) so they
-   sit close together and leave more of the narrow dialog to the label. */
+   alignment off. Hour/min/sec are grouped into one column (a tight inner
+   flex row, see .hms below) so they sit close together and leave more of
+   the narrow dialog to the label. */
 .row {
   display: grid;
-  grid-template-columns: 1fr 28px 124px 34px 20px;
+  grid-template-columns: 28px 1fr 124px 20px;
   align-items: center;
   gap: 3px;
+  border-radius: 8px;
+}
+
+/* The row being dragged by its swatch: lifted slightly so it is clear which
+   one is moving as the others shuffle past it. */
+.row.dragging {
+  background: var(--surface-raised);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* While reordering, keep the grabbing cursor everywhere (the pointer soon
+   leaves the swatch) and stop the drag selecting text in the label inputs. */
+.rows.reordering,
+.rows.reordering * {
+  cursor: grabbing !important;
+  user-select: none;
 }
 
 .hms-heading,
@@ -581,12 +694,6 @@ h3 {
 
 .hms-heading .col-heading {
   width: 40px; /* matches .num */
-}
-
-.arrows {
-  display: flex;
-  align-items: center;
-  gap: 2px;
 }
 
 .col-heading {
@@ -644,7 +751,37 @@ input:focus {
   border: 1px solid var(--line);
   border-radius: 7px;
   background: var(--surface);
-  cursor: pointer;
+  /* A normal arrow, not a hand: the grabbing cursor only appears once a drag
+     has actually engaged (see .reordering). */
+  cursor: default;
+  /* Lets a touch drag on the swatch reorder rather than scroll the dialog. */
+  touch-action: none;
+}
+
+.swatch-wrap {
+  position: relative;
+  display: block;
+  width: 28px;
+  height: 28px;
+}
+
+.swatch-wrap .swatch {
+  display: block;
+}
+
+/* Centred over the swatch; pointer-events: none so clicks and drags land on
+   the colour input underneath. */
+.reorder-icon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 12px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  /* A fixed mid grey whatever the swatch colour -- a subtle hint, so it is
+     fine if it is faint on some colours. */
+  color: #606060;
 }
 
 .swatch::-webkit-color-swatch-wrapper {
@@ -680,16 +817,8 @@ input:focus {
   padding: 4px 0;
 }
 
-.icon.arrow {
-  width: 16px;
-  text-align: center;
-  font-size: 1rem;
-  font-weight: 1000;
-  padding: 2px 0;
-}
-
-/* Move-up on the first row and move-down on the last have nowhere to go --
-   grey them out rather than leaving a live-looking button that does nothing. */
+/* E.g. the Close button while a native picker is open -- grey it out rather
+   than leaving a live-looking button that does nothing. */
 .icon:disabled {
   color: var(--line-bright);
   cursor: default;
